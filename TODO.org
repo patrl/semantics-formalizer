@@ -5,6 +5,9 @@ Barebones take on [[https://github.com/Jiyuan-Tan/PaperFormalizer][PaperFormaliz
 compile → feed errors back → report. Built one step at a time, each tested on
 the toy paper (=examples/toy/=) against its answer key (=EXPECTED.md=).
 
+Target behaviour is pinned down in =SPEC.md= (drafted 2026-11-05); keep this
+plan consistent with it.
+
 Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
 =claude -p= with =--json-schema=.
 
@@ -64,9 +67,10 @@ Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
         sorry + wrong name, then honest): all cheats rejected, honest passes.
         With text scan off, =#print axioms= alone still catches the axiom
   - [X] Re-ran toy claims under audit: 6/6 pass, same verdicts, zero axioms used
-  - [ ] Statement changing between attempts: /not/ enforced mechanically (a
-        retry may legitimately fix the statement). Defer to a faithfulness
-        review pass (see Later), which can compare =lean_statement= to the LaTeX
+  - [ ] Statement changing between attempts: /not/ enforced mechanically.
+        Superseded by SPEC.md §4: statements are approved at checkpoint 3 and
+        frozen; audit must then check the proved statement /equals/ the
+        approved one (see Checkpoints)
 
 * NEXT Toy paper v2: sentences, LFs, derivations
   =examples/toy/paper.tex= rewritten Heim & Kratzer style: lexicon as typed
@@ -93,9 +97,76 @@ Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
         define each sentence's LF once, shared by all claims
   - [ ] Re-run defs + claims on v2
 
-* TODO Step 3: report
-  - [ ] =runs/<paper>/report.md=: table of claims × outcome, with links to Lean files
+* TODO Checkpoints (SPEC.md §4)
+  Settled 2026-11-05: runner halts → =review/<stage>.md= → orchestrator skill
+  walks the user through it in Claude Code → =decisions.json= → =--resume=.
+  Modelled on PaperFormalizer's runner/orchestrator split; no web page for now.
+  - [ ] Runner: halt/resume with state on disk; read =decisions.json=
+  - [ ] Review files: LaTeX, =#check=, blind back-translation, example models,
+        recommendation, =decision:= line
+  - [ ] Blind back-translation (SPEC.md §4): isolated sub-agent sees only
+        comment-stripped Lean + glossary → surface + unfolded English
+        (mechanical =unfold=/=simp only= where possible); compare step
+        classes differences substantive / wording; only substantive flags
+        (even under =--auto=). Test on planted unfaithful claim /and/
+        definition variants, plus zero false flags on the faithful run (SPEC.md §10)
+  - [ ] Split claims into state (checkpoint 3) and prove; freeze statements:
+        audit rejects a proof whose =#check= statement differs from the
+        approved one; prover may only halt back to checkpoint 3 (SPEC.md §5)
+  - [ ] Example models in review files (stages 2–3), from the executable
+        fragment — needs Oracle below
+  - [ ] =--auto= mode, output marked unreviewed
+  - [ ] Orchestrator skill (=.claude/skills/=)
+
+* TODO Outcomes (SPEC.md §5)
+  - [ ] Rename outcomes to =proved= / =refuted= / =open= / =blocked=
+        (currently =proved= / =disproved= / =failed=); =open= carries the
+        oracle's bounded-check result; =blocked= propagates along =depends_on=
+  - [ ] Trace each refutation to its source (definition, step, or earlier
+        false claim, e.g. (3) ⊨ (6) ← Prop 4)
+  - [ ] Countermodels printed readably, in the paper's terms
+
+* TODO Oracle (SPEC.md §6)
+  Generalise =examples/toy/Fragment.lean= into a pipeline output =Oracle.lean=.
+  Blocked on the two open decisions under Toy paper v2 (fixed library vs.
+  generated; one interpreter for =#eval= and proofs).
+  - [ ] Queries in the paper's vocabulary: truth in a model, entailment,
+        contradiction, TC match, /new/ sentences from the lexicon
+  - [ ] Answers: countermodel / "no countermodel up to size n" (always
+        labelled bounded) / proved (matching theorem in =claims/=)
+  - [ ] Usable offline, no model calls (=lake exe oracle …= or =#eval= file)
+  - [ ] Checkpoint 5: sample queries with known answers
+  - [ ] Optional: agent turns a natural-language query into an oracle query,
+        confirmed by the user before running
+
+* TODO Report (SPEC.md §7)
+  - [ ] =runs/<paper>/report.md=: table of claims × outcome × location, with links to Lean files
   - [ ] Include the extract-step =concerns= alongside each outcome
+  - [ ] Refutations with countermodel and traced source
+  - [ ] Interpretive choices (checkpoint 2) and what the user chose
+  - [ ] The agent's own decisions, for approval or reversal
+  - [ ] =open= claims with bounded-check status; =--auto= items marked unreviewed
+
+* TODO Run directory and logging (SPEC.md §3, §8)
+  - [ ] =claims.json=: add source location (=example= kind is under Toy paper v2)
+  - [ ] =log/=: every model call, Lean attempt and decision
+  - [ ] Cost and time recorded per stage (currently only printed)
+  - [ ] *Do the build properly* — required by SPEC.md §8: make =runs/<paper>/=
+        a Lake project so claim files =import Defs= instead of pasting it.
+        Needed before real papers (big Defs, Mathlib)
+
+* TODO Inputs (SPEC.md §2)
+  - [ ] Multi-file LaTeX (=\input= / =\include=) and author macros
+  - [ ] PDF input (tool choice is an open decision); formulas confirmed by the user
+  - [ ] User notes ("Def 3 is intensional", "ignore §6") passed to every step
+
+* TODO Acceptance suite (SPEC.md §10)
+  - [ ] Script that runs the toy paper end to end (=--auto=) and checks the
+        results against =EXPECTED.md=
+  - [ ] Planted unfaithful variants for back-translation (see Checkpoints)
+  - [ ] Keep the fake-model cheat suite as a test
+  - [ ] Real published paper with a hand-checked answer key, before calling
+        the project usable
 
 * TODO Later / maybe
   - [ ] *Build on linglib* (deferred 2026-11-05; next step would be
@@ -109,12 +180,7 @@ Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
           needs a small decidability layer over finite (=Fintype=) models
         - pipeline prompts would need a curated linglib cheat sheet (2350 files)
         - user's clone is on branch =human-review-status= with local edits: pin a commit
-  - [ ] *Do the build properly*: stop pasting =Defs.lean= into every claim file.
-        Either compile =Defs.olean= once and set =LEAN_PATH=, or make =runs/<paper>/=
-        a Lake project so claim files can =import Defs=. Needed before real
-        papers (big Defs, Mathlib).
-  - [ ] Faithfulness review pass: a second call that compares Lean statement to LaTeX
+  - [ ] Suggested repairs as separate proposals the user can accept (SPEC.md §9)
+  - [ ] Web review page (SPEC.md §11), only if conversation review is too painful
   - [ ] Trim cost with =--system-prompt= (Claude Code's default prompt is ~14k tokens/call)
-  - [ ] Try a real semantics paper
   - [ ] Mathlib, if real papers need it (sets, lattices, cardinality)
-  - [ ] Handle multi-file LaTeX and author macros
