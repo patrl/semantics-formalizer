@@ -148,11 +148,15 @@ Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
         =<id>_a=, =<id>_b=, … Not yet tested live
   - [ ] =runs/toy/claims.json= and =Defs.lean= predate the =lf= → =analysis=
         rename: re-run extract + defs on v2 as a regression check
-  - [ ] Second toy paper in the translation style: sentences given intuitive
-        FOL translations (no LFs, no composition rules), with planted errors,
-        e.g. a translation with the wrong quantifier scope for a claimed
-        reading, an entailment claim that fails under the given translations,
-        an ambiguous sentence with two translations; own =EXPECTED.md=
+  - [X] Second toy paper in the translation style: =examples/toy-fol/=
+        (=paper.tex= compiles; =EXPECTED.md=). FOL translations only; (1), (2)
+        have surface/inverse readings; (5)'s translation given only
+        indirectly. 9 claims (4 in running text), 4 planted errors: readings
+        of (1) "equivalent given a student"; "both readings of (2)" entail ∃∀
+        (inverse doesn't); (3) and surface(2) "contradictory"; no-student
+        model "verifies both readings of (1)" (inverse needs a book).
+        Added to SPEC.md §10
+  - [ ] Run extract + defs + state + prove on toy-fol; score vs =EXPECTED.md=
 
 * TODO Checkpoints (SPEC.md §4)
   Settled 2026-11-05: runner halts → =review/<stage>.md= → orchestrator skill

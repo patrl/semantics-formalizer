@@ -439,6 +439,18 @@ and is never shown to the pipeline.
 - The cheat suite (fake model returning `axiom`, `native_decide`, shadowing
   defs, `sorry`) is rejected in full.
 
+`examples/toy-fol/` is a second toy paper in a different style: no LFs or
+composition rules, only intuitive first-order translations (two sentences
+with surface and inverse scope readings). On it:
+
+- Extract finds 6 examples (two with two readings), the definition, and all
+  9 claims, including the 4 in running text, and flags the translation
+  given only indirectly.
+- `Defs.lean` transcribes the translations as given (no invented LF type or
+  composition rules) and keeps the paper's non-empty domain.
+- 5 claims proved and the 4 planted errors refuted with the countermodels
+  in its `EXPECTED.md`; a claim about "both readings" is stated for both.
+
 Before calling the project usable, add at least one real published
 semantics paper with a hand-checked answer key.
 

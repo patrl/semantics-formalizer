@@ -1,0 +1,105 @@
+\documentclass{article}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{gb4e}
+
+\newtheorem{definition}{Definition}
+\newtheorem{proposition}{Proposition}
+
+\title{Scope Without Trees: A Toy Study of Quantifier Readings}
+\author{Anonymous}
+
+\begin{document}
+\maketitle
+
+\section{Introduction}
+
+This note studies the readings of a handful of doubly quantified sentences.
+Rather than committing to a syntax or a compositional semantics, we simply
+assign each sentence one or more translations into first-order logic, as is
+common in descriptive work on scope, and reason about the translations.
+
+\begin{exe}
+  \ex\label{ex:every-a} Every student read a book.
+  \ex\label{ex:a-every} A student read every book.
+  \ex\label{ex:some-no} Some student read no book.
+  \ex\label{ex:no-every} No student read every book.
+  \ex\label{ex:mary-every} Mary read every book.
+  \ex\label{ex:mary-student} Mary is a student.
+\end{exe}
+
+\section{Translations}
+
+We use a first-order language with one-place predicates $\mathit{student}$
+and $\mathit{book}$, a two-place predicate $\mathit{read}$, and an individual
+constant $m$ (for \textit{Mary}).
+
+\begin{definition}[Models and entailment]\label{def:models}
+A model is a standard first-order structure $M = \langle D, I\rangle$ for this
+language, with $D$ non-empty. A set of formulas $\Gamma$ \emph{entails} a
+formula $\varphi$ iff $\varphi$ is true in every model in which all members of
+$\Gamma$ are true. Formulas are \emph{contradictory} iff no model makes them
+all true.
+\end{definition}
+
+Sentence (\ref{ex:every-a}) is ambiguous between a \emph{surface} reading and
+an \emph{inverse} reading:
+\begin{align*}
+  \text{(\ref{ex:every-a}) surface:}\quad & \forall x\,[\mathit{student}(x) \rightarrow \exists y\,[\mathit{book}(y) \wedge \mathit{read}(x,y)]]\\
+  \text{(\ref{ex:every-a}) inverse:}\quad & \exists y\,[\mathit{book}(y) \wedge \forall x\,[\mathit{student}(x) \rightarrow \mathit{read}(x,y)]]
+\end{align*}
+Likewise for (\ref{ex:a-every}):
+\begin{align*}
+  \text{(\ref{ex:a-every}) surface:}\quad & \exists x\,[\mathit{student}(x) \wedge \forall y\,[\mathit{book}(y) \rightarrow \mathit{read}(x,y)]]\\
+  \text{(\ref{ex:a-every}) inverse:}\quad & \forall y\,[\mathit{book}(y) \rightarrow \exists x\,[\mathit{student}(x) \wedge \mathit{read}(x,y)]]
+\end{align*}
+We take (\ref{ex:some-no}) and (\ref{ex:no-every}) to be unambiguous:
+\begin{align*}
+  \text{(\ref{ex:some-no}):}\quad & \exists x\,[\mathit{student}(x) \wedge \neg\exists y\,[\mathit{book}(y) \wedge \mathit{read}(x,y)]]\\
+  \text{(\ref{ex:no-every}):}\quad & \neg\exists x\,[\mathit{student}(x) \wedge \forall y\,[\mathit{book}(y) \rightarrow \mathit{read}(x,y)]]
+\end{align*}
+Sentence (\ref{ex:mary-every}) is translated like the surface reading of
+(\ref{ex:a-every}), with $m$ in place of the existentially bound subject, and
+(\ref{ex:mary-student}) is simply $\mathit{student}(m)$.
+
+\section{Results}
+
+\begin{proposition}\label{prop:inv-surf-1}
+The inverse reading of (\ref{ex:every-a}) entails its surface reading.
+\end{proposition}
+
+\begin{proposition}\label{prop:surf-inv-2}
+The surface reading of (\ref{ex:a-every}) entails its inverse reading.
+\end{proposition}
+
+\begin{proposition}\label{prop:equiv-1}
+In any model with at least one student, the two readings of
+(\ref{ex:every-a}) are equivalent.
+\end{proposition}
+
+\begin{proposition}\label{prop:both-2}
+Both readings of (\ref{ex:a-every}) entail that a single student read every
+book.
+\end{proposition}
+
+\begin{proposition}\label{prop:no-every}
+The translation of (\ref{ex:no-every}) is equivalent to
+$\forall x\,[\mathit{student}(x) \rightarrow \exists y\,[\mathit{book}(y) \wedge \neg\mathit{read}(x,y)]]$:
+every student failed to read at least one book.
+\end{proposition}
+
+\section{Discussion}
+
+The proper-name sentences interact with the quantified ones as expected.
+(\ref{ex:mary-every}) and (\ref{ex:mary-student}) together entail the
+surface reading of (\ref{ex:a-every}), and (\ref{ex:no-every}),
+(\ref{ex:mary-every}) and (\ref{ex:mary-student}) are contradictory.
+
+Similarly, (\ref{ex:some-no}) and the surface reading of (\ref{ex:a-every})
+are contradictory, since the first requires a student who read no book and
+the second a student who read them all.
+
+Finally, a model with no students verifies both readings of
+(\ref{ex:every-a}) vacuously, since each reading only makes a claim about
+students.
+
+\end{document}
