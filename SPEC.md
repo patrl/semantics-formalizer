@@ -227,6 +227,33 @@ and every claim statement. It runs before the review file is written.
    this isolation makes it a check: a translator who knows the intended
    claim tends to read it into the Lean. The runner builds the
    translator's prompt itself, so the isolation is enforced by code.
+   Isolation covers two channels, and both must be closed:
+   - **Content.** The prompt holds only the item's Lean (comments
+     *and docstrings* stripped, since docstrings cite the paper's labels),
+     the parts of `Defs.lean` it uses (stripped the same way), and the
+     glossary. The glossary is generated mechanically from the Lean
+     (identifier names and types), never from docstrings or the paper. The
+     translator gets the statement, not the theorem name or claim id (an id
+     like `every_entails_some` is itself a paraphrase).
+   - **Process.** The backend's own context is a second channel. An agent
+     CLI started in the repo picks up the repo path and name, git status
+     and recent commit messages, project memory, `CLAUDE.md`/`AGENTS.md`,
+     settings and hooks, MCP server instructions and skills (all observed
+     with `claude -p` run from the repo), and commit messages and memory
+     routinely describe the intended claims and planted errors. So the
+     translator call (like every model call) runs from a fresh, empty,
+     neutrally named temp directory (not one under a path that names the
+     project), with a minimal system prompt, no tools, settings, MCP
+     servers, skills or session persistence. Account-level context the
+     CLI attaches regardless (e.g. the user's email) is acceptable: it
+     says nothing about the paper.
+   - **Checked, not assumed.** The acceptance suite (§10) plants a canary
+     string in everything the translator must not see (the paper,
+     `claims.json` statements and notes, Lean comments and docstrings, a
+     commit message, memory) and asserts it appears in neither the
+     translator's prompt nor its output; and a probe call through the same
+     backend path asks the model to report its context, which must show
+     no repo path, git information, memory or project files.
 3. **Compare.** A second backend call reads both readings next to the paper's
    LaTeX (and, for the unfolded reading, the paper's own definitions).
    It lists every difference, each as one line, and classes it as:
@@ -404,6 +431,11 @@ and is never shown to the pipeline.
   every variant must get a substantive flag. On the faithful toy
   formalization, no item may get a substantive flag. Wording differences
   are allowed.
+- The translator is isolated (§4, "Blind back-translation"): canary
+  strings planted in the paper, `claims.json`, Lean comments and
+  docstrings, a commit message and memory appear in neither its prompt nor
+  its output, and a context probe through the same backend path shows no
+  repo path, git information, memory or project files.
 - The cheat suite (fake model returning `axiom`, `native_decide`, shadowing
   defs, `sorry`) is rejected in full.
 

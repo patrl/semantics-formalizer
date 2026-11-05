@@ -29,7 +29,21 @@ Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
         Checked on the v2 extraction: all 22 spans found
   - [X] Runner warns on duplicate ids and =depends_on= naming unknown/later items
   - [X] Approval status kept out of =claims.json= (SPEC.md: =decisions.json= only)
-  - [ ] Live test of the new prompt on toy v2 (not yet run)
+  - [X] Live test on toy v2 (2026-11-05, isolated call, $0.24, 71s): all 14
+        claims found + 6 examples with correct LFs (the 4 "parallel" ones
+        flagged); all 4 planted errors flagged with correct countermodels;
+        every =latex= span located; no dependency warnings
+  - [X] Fix: a justification ("This follows from Prop 2 + Def 3") was
+        extracted as its own claim, and =depends_on= mixed definitions with
+        cited claims. Now: justifications aren't items; new =cites= field
+        for claims an item is said to follow from (for tracing refutations,
+        SPEC.md §5); runner warns on claims in =depends_on= / non-claims in =cites=
+  - [X] Fix: =concerns= held non-concerns ("No proof is given. The claim is
+        true.") — prompt now says only doubts
+  - [X] Rerun (isolated, $0.23, 67s): exactly 14 claims + 6 examples + 8
+        definitions; =pred1= cites =prop2=, (3) ⊨ (6) cites =prop4=; all 4
+        planted errors flagged; all spans located; no warnings. Residual
+        noise: one concern comments on its own field choice (=pred1=)
   - [ ] Defs stage doesn't consume examples yet: blocked on how LFs are
         represented (see "Decide how the pipeline produces this" under Toy v2)
 
@@ -128,6 +142,13 @@ Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
         classes differences substantive / wording; only substantive flags
         (even under =--auto=). Test on planted unfaithful claim /and/
         definition variants, plus zero false flags on the faithful run (SPEC.md §10)
+        - Isolation, both channels (SPEC.md §4): /content/ — strip docstrings
+          too, glossary from Lean names/types only, no theorem name or claim
+          id; /process/ — go through =call_claude()= (empty =/tmp= dir, minimal
+          system prompt, no settings/MCP/skills), never a repo-cwd call.
+          Learned 2026-11-05: default =claude -p= from the repo saw repo path,
+          git log, and memory; scratchpad paths name the project too
+        - Canary test + context probe in the acceptance suite (SPEC.md §10)
   - [X] Split claims into =state= (checkpoint 3) and =prove=; statements frozen
         - =prompts/state.md=: model returns only a closed =Prop= term, not asked
           whether it's true; checked as =example : Prop := …=; no commands or

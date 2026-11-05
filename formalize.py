@@ -75,10 +75,11 @@ CLAIMS_SCHEMA = {
                     "statement": {"type": "string"},
                     "lf": {"type": "string"},
                     "depends_on": {"type": "array", "items": {"type": "string"}},
+                    "cites": {"type": "array", "items": {"type": "string"}},
                     "concerns": {"type": "string"},
                 },
                 "required": ["id", "kind", "label", "latex", "statement", "lf",
-                             "depends_on", "concerns"],
+                             "depends_on", "cites", "concerns"],
             },
         }
     },
@@ -110,12 +111,17 @@ def extract(paper: Path, run_dir: Path) -> None:
     print(f"extract: {paper} -> {run_dir}/claims.json")
     tex = paper.read_text()
     result = call_claude((PROMPTS / "extract.md").read_text() + tex, CLAIMS_SCHEMA)
+    kinds = {i["id"]: i["kind"] for i in result["items"]}
     seen = set()
     for item in result["items"]:
         # Located by us, not the model; not found means `latex` isn't verbatim.
         item["source"] = locate(tex, item["latex"])
         problems = [f"depends on unknown or later item {d}"
                     for d in item["depends_on"] if d not in seen]
+        problems += [f"depends on claim {d} (belongs in cites)"
+                     for d in item["depends_on"] if kinds.get(d) == "claim"]
+        problems += [f"cites {c}, which is not a claim"
+                     for c in item["cites"] if kinds.get(c) != "claim"]
         if item["id"] in seen:
             problems.append("duplicate id")
         if item["source"] is None:

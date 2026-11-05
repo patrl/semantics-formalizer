@@ -11,6 +11,10 @@ Below is the LaTeX source of the paper. Extract, in the order they appear:
   derived truth condition, or an informal claim stated in running text (e.g.
   "so (2) entails (3)", "this gives the truth conditions …").
 
+A justification or proof sketch ("This follows from Proposition 2 together
+with Definition 3") is not an item of its own: record the claims it cites in
+`cites` on the item it justifies.
+
 For each item give:
 
 - `id`: a short stable identifier, e.g. `def1`, `prop3`, `ex2` (use the
@@ -31,9 +35,13 @@ For each item give:
   the paper gives the LF only indirectly ("(3)–(6) are parallel"), write it
   out and say so in `concerns`. If the paper gives none, leave it empty and
   say so in `concerns`.
-- `depends_on`: ids of earlier definitions and examples this item uses.
+- `depends_on`: ids of earlier definitions and examples this item uses (not
+  claims).
+- `cites`: ids of claims the paper says this item follows from (e.g. "by
+  Proposition 4, …"); empty if none.
 - `concerns`: anything ambiguous, underspecified, or possibly false about the
   item as stated (empty string if none). This is where doubts go — not into
-  `statement`.
+  `statement`. Only doubts: don't note that an item is true, or that the
+  paper gives no proof.
 
 --- PAPER ---
