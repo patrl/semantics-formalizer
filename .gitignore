@@ -1,2 +1,8 @@
 # cache and other artifacts produced by Lean's Lake build tool
 .lake/
+
+# Python
+__pycache__/
+
+# Pipeline output (regenerate with formalize.py)
+runs/

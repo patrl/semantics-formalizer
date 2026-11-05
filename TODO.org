@@ -1,0 +1,84 @@
+#+TITLE: semantics-formalizer plan
+#+TODO: TODO NEXT | DONE
+
+Barebones take on [[https://github.com/Jiyuan-Tan/PaperFormalizer][PaperFormalizer]]: LaTeX → extract claims → write Lean →
+compile → feed errors back → report. Built one step at a time, each tested on
+the toy paper (=examples/toy/=) against its answer key (=EXPECTED.md=).
+
+Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
+=claude -p= with =--json-schema=.
+
+* DONE Step 0: setup
+  - [X] Toy paper =examples/toy/paper.tex= (determiners, conservativity, monotonicity)
+  - [X] Answer key =examples/toy/EXPECTED.md= (Props 4 and 5 are planted falsehoods)
+  - [X] =call_claude()= helper in =formalize.py=
+
+* DONE Step 1: extract
+  =python3 formalize.py extract examples/toy/paper.tex= → =runs/toy/claims.json=
+  - [X] Prompt in =prompts/extract.md=
+  - [X] Separate faithful =statement= from =concerns=
+  - [X] Tested: all 9 items extracted; Props 4 and 5 flagged with correct counterexamples
+
+* DONE Step 2a: shared definitions
+  =python3 formalize.py defs examples/toy/paper.tex= → =runs/toy/Defs.lean=
+  (+ =Defs.notes.md=, and every attempt kept as =Defs.attemptN.lean/.log=)
+  - [X] Prompt =prompts/defs.md= (core Lean, properties as =D → Prop=, truth values as =Prop=)
+  - [X] Generic =write_lean()= loop: ask → compile with =lean= → feed errors back (max 4)
+  - [X] Checked by eye: faithful. =every= has no existential import; MON↓ spelled
+        out and flagged as an interpretation; ↑MON *not* invented
+  - [X] Retry path exercised (see Step 2c fake-model test)
+  - [X] Tweak prompt: model's notes claim "not compiled" (it can't see our compile step)
+
+* DONE Step 2b: formalize claims
+  For each =claim=: one Lean file building on =Defs.lean=, with a theorem
+  stating the claim faithfully, plus a proof attempt.
+  =python3 formalize.py claims examples/toy/paper.tex [claim-id]=
+  → =runs/toy/claims/<id>.lean= + =runs/toy/results.json=
+  - [X] Decide how claim files see =Defs.lean=: *paste it in for now* (see
+        "Do the build properly" under Later)
+  - [X] Prompt =prompts/claim.md=: model picks verdict =proved= (theorem =<id>=)
+        or =disproved= (theorem =<id>_false : ¬ …=)
+  - [X] Reuse =write_lean()= loop, now with a pasted prefix; compiler line
+        numbers shifted so they point into the model's own code
+  - [X] If the claim is false: prove its *negation* (a counterexample) rather
+        than weakening the statement
+  - [X] Record outcome per claim in =results.json=: =proved= / =disproved= / =failed=
+  - [X] Test: Props 1, 2, 3, 6 proved; Props 4, 5 disproved — all match
+        =EXPECTED.md=, all on attempt 1, ~$0.45 total. Statements checked by
+        eye: faithful (Prop 5 refuted for /every/ domain, no A ≠ ∅ smuggled in)
+  - [X] Retry path exercised — via a fake =call_claude= returning cheats, see Step 2c
+
+* DONE Step 2c: guard against cheating
+  =audit()= in =formalize.py=; problems are fed back to the model like compiler errors.
+  - [X] =#print axioms <thm>= appended to each claim file; only =propext=,
+        =Classical.choice=, =Quot.sound= allowed. Catches =sorry= (=sorryAx=),
+        declared axioms, =native_decide= (generated axiom) — whatever the syntax.
+        Also checks the expected theorem name (=<id>= / =<id>_false=) exists
+  - [X] Text scan of model code (comments stripped): =sorry=, =admit=, =axiom=,
+        =native_decide=, =unsafe=, =implemented_by=, =extern= (all steps)
+  - [X] Claims may not introduce new definitions (=def=, =abbrev=, =structure=,
+        =instance=, =notation=, …) → can't shadow/replace =Defs.lean=
+  - [X] =#check @<thm>= → Lean's own rendering of the proved statement saved as
+        =lean_statement= in =results.json= (for review/report)
+  - [X] Tested offline with a fake model (axiom, native_decide, shadowing def,
+        sorry + wrong name, then honest): all cheats rejected, honest passes.
+        With text scan off, =#print axioms= alone still catches the axiom
+  - [X] Re-ran toy claims under audit: 6/6 pass, same verdicts, zero axioms used
+  - [ ] Statement changing between attempts: /not/ enforced mechanically (a
+        retry may legitimately fix the statement). Defer to a faithfulness
+        review pass (see Later), which can compare =lean_statement= to the LaTeX
+
+* NEXT Step 3: report
+  - [ ] =runs/<paper>/report.md=: table of claims × outcome, with links to Lean files
+  - [ ] Include the extract-step =concerns= alongside each outcome
+
+* TODO Later / maybe
+  - [ ] *Do the build properly*: stop pasting =Defs.lean= into every claim file.
+        Either compile =Defs.olean= once and set =LEAN_PATH=, or make =runs/<paper>/=
+        a Lake project so claim files can =import Defs=. Needed before real
+        papers (big Defs, Mathlib).
+  - [ ] Faithfulness review pass: a second call that compares Lean statement to LaTeX
+  - [ ] Trim cost with =--system-prompt= (Claude Code's default prompt is ~14k tokens/call)
+  - [ ] Try a real semantics paper
+  - [ ] Mathlib, if real papers need it (sets, lattices, cardinality)
+  - [ ] Handle multi-file LaTeX and author macros

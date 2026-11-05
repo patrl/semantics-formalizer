@@ -1,0 +1,78 @@
+\documentclass{article}
+\usepackage{amsmath,amssymb,amsthm}
+
+\newtheorem{definition}{Definition}
+\newtheorem{proposition}{Proposition}
+\newcommand{\sem}[1]{[\![#1]\!]}
+
+\title{Determiners as Relations: A Toy Fragment}
+\author{Anonymous}
+
+\begin{document}
+\maketitle
+
+\section{The fragment}
+
+We work with an extensional type theory with basic types $e$ (entities) and
+$t$ (truth values). A \emph{model} is a pair $M = \langle D, I \rangle$ where
+$D$ is a set of entities and $I$ is an interpretation function. Properties
+(type $\langle e,t \rangle$) are identified with their characteristic
+functions, and we freely move between a property $P$ and the set
+$\{x \in D \mid P(x) = 1\}$.
+
+Determiners denote functions of type $\langle\langle e,t\rangle,\langle\langle e,t\rangle,t\rangle\rangle$:
+
+\begin{definition}[Determiner denotations]\label{def:dets}
+For all properties $A, B$:
+\begin{align*}
+  \sem{\textit{every}}(A)(B) = 1 &\iff A \subseteq B\\
+  \sem{\textit{some}}(A)(B) = 1  &\iff A \cap B \neq \emptyset\\
+  \sem{\textit{no}}(A)(B) = 1    &\iff A \cap B = \emptyset
+\end{align*}
+\end{definition}
+
+\begin{definition}[Conservativity]\label{def:cons}
+A determiner denotation $\delta$ is \emph{conservative} iff for all $A, B$:
+$\delta(A)(B) = \delta(A)(A \cap B)$.
+\end{definition}
+
+\begin{definition}[Monotonicity]\label{def:mon}
+A determiner denotation $\delta$ is \emph{left downward monotone}
+(${\downarrow}\mathrm{MON}$) iff whenever $\delta(A)(B) = 1$ and
+$A' \subseteq A$, then $\delta(A')(B) = 1$. It is \emph{right upward monotone}
+($\mathrm{MON}{\uparrow}$) iff whenever $\delta(A)(B) = 1$ and
+$B \subseteq B'$, then $\delta(A)(B') = 1$. Right downward monotonicity
+($\mathrm{MON}{\downarrow}$) is defined analogously.
+\end{definition}
+
+\section{Results}
+
+\begin{proposition}\label{prop:cons}
+$\sem{\textit{every}}$, $\sem{\textit{some}}$ and $\sem{\textit{no}}$ are
+all conservative.
+\end{proposition}
+
+\begin{proposition}\label{prop:every-mon}
+$\sem{\textit{every}}$ is ${\downarrow}\mathrm{MON}$ and $\mathrm{MON}{\uparrow}$.
+\end{proposition}
+
+\begin{proposition}\label{prop:no-mon}
+$\sem{\textit{no}}$ is ${\downarrow}\mathrm{MON}$ and $\mathrm{MON}{\downarrow}$.
+\end{proposition}
+
+\begin{proposition}\label{prop:some-mon}
+$\sem{\textit{some}}$ is ${\downarrow}\mathrm{MON}$.
+\end{proposition}
+
+\begin{proposition}\label{prop:import}
+For all $A, B$: if $\sem{\textit{every}}(A)(B) = 1$ then
+$\sem{\textit{some}}(A)(B) = 1$. That is, \textit{every student smokes}
+entails \textit{some student smokes}.
+\end{proposition}
+
+\begin{proposition}\label{prop:instantiation}
+Let $j \in D$. If $\sem{\textit{every}}(\sem{\textit{student}})(\sem{\textit{smokes}}) = 1$
+and $\sem{\textit{student}}(j) = 1$, then $\sem{\textit{smokes}}(j) = 1$.
+\end{proposition}
+
+\end{document}
