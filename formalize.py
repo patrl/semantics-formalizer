@@ -73,12 +73,12 @@ CLAIMS_SCHEMA = {
                     "label": {"type": "string"},
                     "latex": {"type": "string"},
                     "statement": {"type": "string"},
-                    "lf": {"type": "string"},
+                    "analysis": {"type": "string"},
                     "depends_on": {"type": "array", "items": {"type": "string"}},
                     "cites": {"type": "array", "items": {"type": "string"}},
                     "concerns": {"type": "string"},
                 },
-                "required": ["id", "kind", "label", "latex", "statement", "lf",
+                "required": ["id", "kind", "label", "latex", "statement", "analysis",
                              "depends_on", "cites", "concerns"],
             },
         }
@@ -291,10 +291,10 @@ def front_matter(paper: Path) -> str:
 
 
 def check_examples(ids: list[str]):
-    """Defs.lean must define each example's LF under the example's own id."""
+    """Defs.lean must define each example under the example's own id."""
     def check(answer: dict) -> list[str]:
         bare = strip_comments(answer["lean"])
-        return [f"no definition named `{i}` (the LF of example {i})" for i in ids
+        return [f"no definition named `{i}` (example {i})" for i in ids
                 if not re.search(rf"(?m)^\s*(?:@\[[^\]]*\]\s*)?(?:noncomputable\s+)?"
                                  rf"(?:def|abbrev)\s+{re.escape(i)}\b", bare)]
     return check

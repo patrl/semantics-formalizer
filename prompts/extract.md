@@ -4,9 +4,13 @@ Below is the LaTeX source of the paper. Extract, in the order they appear:
 
 - every **definition**: numbered definitions, and also unnumbered
   stipulations that later material relies on (e.g. the type theory, what a
-  model is, the LFs assumed in running text);
+  model is, the representation language and how sentences map into it,
+  assumed LFs or translation conventions stated in running text);
 - every **example**: each numbered example sentence, e.g. `\ex` items or
-  `(1)`, `(2)`, … in an `exe`/`examples` environment;
+  `(1)`, `(2)`, … in an `exe`/`examples` environment. A representation the
+  paper assigns to a sentence (an LF, or a translation into first-order
+  logic or another representation language) is part of that example, not a
+  separate item;
 - every **claim**: proposition, theorem, lemma, corollary, fact, prediction,
   derived truth condition, or an informal claim stated in running text (e.g.
   "so (2) entails (3)", "this gives the truth conditions …").
@@ -30,11 +34,15 @@ For each item give:
   quantifiers and expand any notation, but do **not** fix, strengthen, or
   weaken the item — transcribe what the paper says, even if you think it is
   wrong. For an example, the sentence itself.
-- `lf`: for an example, its LF in the paper's own notation (e.g.
-  `[S [DP every linguist] sneezed]`); for anything else, an empty string. If
-  the paper gives the LF only indirectly ("(3)–(6) are parallel"), write it
-  out and say so in `concerns`. If the paper gives none, leave it empty and
-  say so in `concerns`.
+- `analysis`: for an example, the representation(s) the paper assigns to
+  it, in the paper's own notation, each prefixed by what it is, e.g.
+  `LF: [S [DP every linguist] sneezed]` or
+  `FOL: ∀x[linguist(x) → sneezed(x)]` (one per line if there are several,
+  e.g. two readings); for anything else, an empty string. If the paper
+  gives it only indirectly ("(3)–(6) are parallel"), write it out and say so
+  in `concerns`. If the paper gives none, leave it empty and say so in
+  `concerns`. Truth conditions the paper *derives* from a representation
+  are claims, not part of `analysis`.
 - `depends_on`: ids of earlier definitions and examples this item uses (not
   claims).
 - `cites`: ids of claims the paper says this item follows from (e.g. "by

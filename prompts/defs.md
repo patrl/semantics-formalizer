@@ -1,29 +1,43 @@
 You are helping formalize a formal-semantics paper in Lean 4.
 
 Below are the paper's front matter (FRONT MATTER: the start of its LaTeX), its
-**definitions** (DEFINITIONS, JSON) and its numbered **examples** with their
-LFs (EXAMPLES, JSON), as extracted from its LaTeX. Write a single
+**definitions** (DEFINITIONS, JSON) and its numbered **examples** with the
+representations it assigns them (EXAMPLES, JSON, field `analysis`), as
+extracted from its LaTeX. Write a single
 self-contained Lean 4 file that formalizes all of them. Later, each of the
 paper's claims will be stated and proved on top of this file.
 
-Papers differ a lot in how they set up syntax and interpretation, so follow
-**this paper's** conventions, not a standard template:
+Papers differ a lot in how they get from sentences to meanings: LFs
+interpreted by composition rules, intuitive translations into first-order
+logic or another representation language, translation rules, or a mix.
+Follow **this paper's** route, not a standard template, and formalize only
+the machinery it actually has (don't invent LFs for a paper that only gives
+translations):
 
-- Define the paper's LFs as a Lean type in its own terms (its categories,
-  node labels, terminals vs. branching nodes, whatever its trees look like),
-  and the paper's notion of model.
-- Define interpretation **once, generically**: a function computing the
-  denotation of any LF from the lexicon by the paper's composition rules
-  (by recursion on the LF). Every sentence's meaning must be *computed* from
-  its LF this way. Never write a sentence's truth conditions by hand: truth
-  conditions the paper derives are claims, to be checked later against
-  your interpretation function, not definitions.
+- Define the paper's notion of model, and whatever representations it uses
+  (e.g. an LF tree type in its own categories and labels, or the syntax of
+  its logic), in its own terms.
+- Where the paper gives a **procedure** from representations to meanings
+  (composition rules, a semantics for its logic, translation rules), define
+  it **once, generically** (by recursion on the representation) and compute
+  every example's meaning through it. Never write such a meaning out by
+  hand: truth conditions the paper derives are claims, to be checked later
+  against your definitions.
+- Where the paper simply **assigns** a representation to a sentence (an
+  intuitive translation into FOL, say), that assignment is the paper's
+  analysis: transcribe it as given. If the paper's logic is standard and
+  its claims are only about what sentences mean, you may render a
+  translation directly as a Lean proposition about a model; if any claim is
+  about the representations themselves (scope, variable binding, the
+  translation), define their syntax and interpretation instead.
 - If the paper's rules leave a case open (e.g. which daughter is the
-  function, or what happens on a type mismatch), make the interpretation
+  function, or what happens on a type mismatch), make the definitions
   reflect that faithfully (e.g. return `Option`) rather than quietly
   deciding it, and note the choice.
-- Define each example's LF as `def <id> : … := …`, named **exactly** by its
-  `id` from EXAMPLES, transcribing its `lf`.
+- Define each example as `def <id> … := …`, named **exactly** by its `id`
+  from EXAMPLES, holding its representation as given in `analysis` (an LF,
+  a formula, or the translation's meaning). If it has several readings,
+  define one per reading (`<id>_a`, `<id>_b`, …) and make `<id>` list them.
 
 Constraints:
 

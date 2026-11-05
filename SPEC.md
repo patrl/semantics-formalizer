@@ -55,8 +55,8 @@ Everything goes in one run directory per paper (currently `runs/<paper>/`).
 | Artifact | Contents |
 |---|---|
 | `source/` | The preprocessed paper (flattened, macros expanded, or converted from PDF) plus the original (§2) |
-| `claims.json` | Extracted items: id, kind (`definition` / `claim` / `example`), label, verbatim LaTeX, faithful informal statement, LF (examples), dependencies, concerns, and source location (computed by the runner by finding the verbatim LaTeX in the source, never reported by the model). Approval status is not stored here: it lives in `decisions.json` |
-| `Defs.lean` | The theory: types, lexicon, composition rules, model class, definitions, numbered examples and their LFs |
+| `claims.json` | Extracted items: id, kind (`definition` / `claim` / `example`), label, verbatim LaTeX, faithful informal statement, analysis (examples: the LF and/or translation the paper assigns), dependencies, concerns, and source location (computed by the runner by finding the verbatim LaTeX in the source, never reported by the model). Approval status is not stored here: it lives in `decisions.json` |
+| `Defs.lean` | The theory: types, lexicon, composition rules, model class, definitions, numbered examples and their representations |
 | `statements.json` | Per claim: its Lean statement (a closed `Prop`, from stage 3) and notes. Frozen once approved: stage 4 proves or refutes exactly this |
 | `claims/<id>.lean` | One file per claim: a theorem `<id>` (proved) or `<id>_false : ¬ …` (refuted, with a counterexample) |
 | `Oracle.lean` (+ CLI wrapper) | The executable oracle (§6) |
@@ -172,7 +172,7 @@ agent's decisions" for the user to approve or overturn afterwards.
 
 | # | Stage | Halts for the user on |
 |---|---|---|
-| 1 | **Extract** definitions, claims, and examples (numbered sentences + LFs), including claims stated only in running text | Coverage, and each informal `statement` |
+| 1 | **Extract** definitions, claims, and examples (numbered sentences + their LFs or translations), including claims stated only in running text | Coverage, and each informal `statement` |
 | 2 | **Formalize definitions** (`Defs.lean`) | Each interpretive choice, listed separately with the alternative readings |
 | 3 | **State claims** (statement only, no proof yet) | Each statement's fidelity. *This is the key fidelity checkpoint*: a faithful statement that turns out false is a finding, and an unfaithful statement is a bug |
 | 4 | **Prove / refute** | Nothing, unless the prover wants to change a statement (rule 4 above). Outcomes are reported, with each refutation's counterexample in the paper's own terms |
@@ -445,12 +445,16 @@ semantics paper with a hand-checked answer key.
 ## 11. Decided
 
 - **Generated fragment, not a fixed library** (2026-11-05, for now): the
-  model writes each paper's LF syntax, model notion and interpretation in
-  `Defs.lean`, because papers use very different conventions. The
-  interpretation is defined once, generically, by the paper's composition
-  rules over LFs, and every numbered example is a `def` named by its id;
-  sentence truth conditions are never written by hand (the paper's derived
-  truth conditions are claims checked against the interpreter). Cost: the
+  model writes each paper's representations, model notion and
+  interpretation in `Defs.lean`, because papers use very different
+  conventions, and not all have LFs: many give intuitive translations into
+  first-order logic or another representation language. Rule: whatever
+  the paper specifies as a *procedure* (composition rules, a semantics for
+  its logic, translation rules) is implemented once, generically, and every
+  example's meaning is computed through it, never written by hand; whatever
+  the paper *assigns* per sentence (an intuitive translation) is its
+  analysis and is transcribed as given. Truth conditions the paper derives
+  from either are claims. Every numbered example is a `def` named by its id. Cost: the
   interpreter is checked per paper (checkpoint 2, back-translation) rather
   than once, and the oracle is rebuilt per paper. Revisit if a family of
   papers shares enough machinery to justify a library.

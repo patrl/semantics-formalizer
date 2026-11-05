@@ -137,6 +137,22 @@ Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
         models, =ex1=–=ex6= as LF defs. No hand-written sentence TCs.
         Interpretive choices in =runs/toy/Defs.notes.md= (checkpoint 2)
   - [ ] State + prove on v2 (stop after =state= to review statements)
+  - [X] Not every paper has LFs: many give intuitive translations into FOL or
+        another representation language. Generalized: extract field =lf= →
+        =analysis= (=LF: …= / =FOL: …=, one per reading); =defs.md= formalizes
+        only the machinery the paper has — /procedures/ (composition rules,
+        a logic's semantics, translation rules) implemented once and every
+        example computed through them; per-sentence /assignments/ (intuitive
+        translations) transcribed as given; shallow embedding allowed unless
+        claims are about the representations themselves. Several readings →
+        =<id>_a=, =<id>_b=, … Not yet tested live
+  - [ ] =runs/toy/claims.json= and =Defs.lean= predate the =lf= → =analysis=
+        rename: re-run extract + defs on v2 as a regression check
+  - [ ] Second toy paper in the translation style: sentences given intuitive
+        FOL translations (no LFs, no composition rules), with planted errors,
+        e.g. a translation with the wrong quantifier scope for a claimed
+        reading, an entailment claim that fails under the given translations,
+        an ambiguous sentence with two translations; own =EXPECTED.md=
 
 * TODO Checkpoints (SPEC.md §4)
   Settled 2026-11-05: runner halts → =review/<stage>.md= → orchestrator skill
