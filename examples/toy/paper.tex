@@ -1,9 +1,12 @@
 \documentclass{article}
 \usepackage{amsmath,amssymb,amsthm}
+\usepackage{gb4e}
 
 \newtheorem{definition}{Definition}
 \newtheorem{proposition}{Proposition}
+\newtheorem{prediction}{Prediction}
 \newcommand{\sem}[1]{[\![#1]\!]}
+\newcommand{\lam}[1]{\lambda #1 \,.\,}
 
 \title{Determiners as Relations: A Toy Fragment}
 \author{Anonymous}
@@ -11,25 +14,91 @@
 \begin{document}
 \maketitle
 
+\section{Introduction}
+
+This note develops a small extensional fragment of English containing
+proper names, intransitive verbs, common nouns and the determiners
+\textit{every}, \textit{some} and \textit{no}, and checks some of its
+predictions about sentences like those in (\ref{ex:ann})--(\ref{ex:some-phon}).
+
+\begin{exe}
+  \ex\label{ex:ann} Ann sneezed.
+  \ex\label{ex:every} Every linguist sneezed.
+  \ex\label{ex:some} Some linguist sneezed.
+  \ex\label{ex:no} No linguist sneezed.
+  \ex\label{ex:every-phon} Every phonologist sneezed.
+  \ex\label{ex:some-phon} Some phonologist sneezed.
+\end{exe}
+
 \section{The fragment}
 
-We work with an extensional type theory with basic types $e$ (entities) and
-$t$ (truth values). A \emph{model} is a pair $M = \langle D, I \rangle$ where
-$D$ is a set of entities and $I$ is an interpretation function. Properties
-(type $\langle e,t \rangle$) are identified with their characteristic
-functions, and we freely move between a property $P$ and the set
-$\{x \in D \mid P(x) = 1\}$.
+We work with an extensional type theory with basic types $e$ and $t$, where
+$D_e$ is the domain of entities and $D_t = \{0, 1\}$. For types $\sigma,
+\tau$, $D_{\langle\sigma,\tau\rangle}$ is the set of functions from
+$D_\sigma$ to $D_\tau$. A \emph{model} fixes $D_e$ together with the
+interpretation of the non-logical vocabulary (\textit{Ann}, \textit{linguist},
+\textit{phonologist}, \textit{sneezed}). We freely identify a function $f \in
+D_{\langle e,t\rangle}$ with the set $\{x \in D_e \mid f(x) = 1\}$.
 
-Determiners denote functions of type $\langle\langle e,t\rangle,\langle\langle e,t\rangle,t\rangle\rangle$:
+\paragraph{Syntax.} We assume the following binary-branching LFs, where
+(\ref{ex:ann}) is $[_S\ \text{Ann}\ \text{sneezed}]$, and a quantified sentence
+such as (\ref{ex:every}) is $[_S\ [_{DP}\ \text{every}\ \text{linguist}]\
+\text{sneezed}]$; (\ref{ex:some})--(\ref{ex:some-phon}) are parallel.
 
-\begin{definition}[Determiner denotations]\label{def:dets}
-For all properties $A, B$:
+\begin{definition}[Lexicon]\label{def:lexicon}
 \begin{align*}
-  \sem{\textit{every}}(A)(B) = 1 &\iff A \subseteq B\\
-  \sem{\textit{some}}(A)(B) = 1  &\iff A \cap B \neq \emptyset\\
-  \sem{\textit{no}}(A)(B) = 1    &\iff A \cap B = \emptyset
+  \sem{\textit{Ann}} &= \mathbf{ann} \in D_e\\
+  \sem{\textit{linguist}} &= \lam{x \in D_e} x \text{ is a linguist}\\
+  \sem{\textit{phonologist}} &= \lam{x \in D_e} x \text{ is a phonologist}\\
+  \sem{\textit{sneezed}} &= \lam{x \in D_e} x \text{ sneezed}\\
+  \sem{\textit{every}} &= \lam{f \in D_{\langle e,t\rangle}} \lam{g \in D_{\langle e,t\rangle}} \forall x \in D_e\,[f(x) = 1 \rightarrow g(x) = 1]\\
+  \sem{\textit{some}} &= \lam{f \in D_{\langle e,t\rangle}} \lam{g \in D_{\langle e,t\rangle}} \exists x \in D_e\,[f(x) = 1 \wedge g(x) = 1]\\
+  \sem{\textit{no}} &= \lam{f \in D_{\langle e,t\rangle}} \lam{g \in D_{\langle e,t\rangle}} \neg\exists x \in D_e\,[f(x) = 1 \wedge g(x) = 1]
 \end{align*}
 \end{definition}
+
+\begin{definition}[Composition rules]\label{def:rules}
+\textbf{Terminal Nodes (TN):} if $\alpha$ is a terminal node, $\sem{\alpha}$
+is specified in the lexicon. \textbf{Functional Application (FA):} if
+$\alpha$ is a branching node with daughters $\beta$ and $\gamma$, and
+$\sem{\beta} \in D_{\langle\sigma,\tau\rangle}$ and $\sem{\gamma} \in
+D_\sigma$, then $\sem{\alpha} = \sem{\beta}(\sem{\gamma})$.
+\end{definition}
+
+We restrict attention to models that respect the obvious lexical relation
+between the two nouns:
+
+\begin{definition}[Meaning postulate]\label{def:mp}
+For all $x \in D_e$: if $\sem{\textit{phonologist}}(x) = 1$ then
+$\sem{\textit{linguist}}(x) = 1$.
+\end{definition}
+
+\begin{definition}[Entailment]\label{def:entail}
+A sentence $S$ \emph{entails} a sentence $S'$ iff $\sem{S'} = 1$ in every
+model (respecting Definition~\ref{def:mp}) in which $\sem{S} = 1$. Two
+sentences are \emph{contradictory} iff there is no such model in which both
+are true.
+\end{definition}
+
+\section{Truth conditions}
+
+For (\ref{ex:ann}), FA applies once:
+$\sem{(\ref{ex:ann})} = \sem{\textit{sneezed}}(\sem{\textit{Ann}}) = 1$ iff
+$\mathbf{ann}$ sneezed.
+The derivation for (\ref{ex:every}) is as follows.
+\begin{align*}
+  \sem{(\ref{ex:every})}
+  &= \sem{[_{DP}\ \text{every linguist}]}(\sem{\textit{sneezed}}) && \text{by FA}\\
+  &= \sem{\textit{every}}(\sem{\textit{linguist}})(\sem{\textit{sneezed}}) && \text{by FA}\\
+  &= 1 \text{ iff } \forall x \in D_e\,[\sem{\textit{linguist}}(x) = 1 \rightarrow \sem{\textit{sneezed}}(x) = 1] && \text{by TN, $\beta$-reduction}\\
+  &= 1 \text{ iff every linguist sneezed}
+\end{align*}
+Entirely analogous derivations give $\sem{(\ref{ex:some})} = 1$ iff $\exists
+x \in D_e\,[x \text{ is a linguist} \wedge x \text{ sneezed}]$, and
+$\sem{(\ref{ex:no})} = 1$ iff $\exists x \in D_e\,[x \text{ is a linguist}
+\wedge \neg(x \text{ sneezed})]$.
+
+\section{Determiner properties}
 
 \begin{definition}[Conservativity]\label{def:cons}
 A determiner denotation $\delta$ is \emph{conservative} iff for all $A, B$:
@@ -44,8 +113,6 @@ $A' \subseteq A$, then $\delta(A')(B) = 1$. It is \emph{right upward monotone}
 $B \subseteq B'$, then $\delta(A)(B') = 1$. Right downward monotonicity
 ($\mathrm{MON}{\downarrow}$) is defined analogously.
 \end{definition}
-
-\section{Results}
 
 \begin{proposition}\label{prop:cons}
 $\sem{\textit{every}}$, $\sem{\textit{some}}$ and $\sem{\textit{no}}$ are
@@ -64,15 +131,34 @@ $\sem{\textit{no}}$ is ${\downarrow}\mathrm{MON}$ and $\mathrm{MON}{\downarrow}$
 $\sem{\textit{some}}$ is ${\downarrow}\mathrm{MON}$.
 \end{proposition}
 
-\begin{proposition}\label{prop:import}
-For all $A, B$: if $\sem{\textit{every}}(A)(B) = 1$ then
-$\sem{\textit{some}}(A)(B) = 1$. That is, \textit{every student smokes}
-entails \textit{some student smokes}.
-\end{proposition}
+\section{Predictions}
 
-\begin{proposition}\label{prop:instantiation}
-Let $j \in D$. If $\sem{\textit{every}}(\sem{\textit{student}})(\sem{\textit{smokes}}) = 1$
-and $\sem{\textit{student}}(j) = 1$, then $\sem{\textit{smokes}}(j) = 1$.
-\end{proposition}
+The determiner properties above translate directly into predictions about
+the sentences in (\ref{ex:ann})--(\ref{ex:some-phon}).
+
+\begin{prediction}\label{pred:every-phon}
+(\ref{ex:every}) entails (\ref{ex:every-phon}).
+\end{prediction}
+
+This follows from Proposition~\ref{prop:every-mon} together with
+Definition~\ref{def:mp}. By the same reasoning, Proposition~\ref{prop:some-mon}
+predicts that (\ref{ex:some}) entails (\ref{ex:some-phon}).
+
+\begin{prediction}\label{pred:some-phon-up}
+(\ref{ex:some-phon}) entails (\ref{ex:some}).
+\end{prediction}
+
+\begin{prediction}\label{pred:instantiation}
+In any model in which $\mathbf{ann}$ is a linguist, (\ref{ex:every}) entails
+(\ref{ex:ann}).
+\end{prediction}
+
+\begin{prediction}\label{pred:contradictory}
+(\ref{ex:some}) and (\ref{ex:no}) are contradictory.
+\end{prediction}
+
+Finally, the fragment captures the intuition that universal statements
+carry existential commitment: (\ref{ex:every}) entails (\ref{ex:some}), since
+if every linguist sneezed then, in particular, some linguist did.
 
 \end{document}

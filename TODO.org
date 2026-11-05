@@ -68,11 +68,47 @@ Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
         retry may legitimately fix the statement). Defer to a faithfulness
         review pass (see Later), which can compare =lean_statement= to the LaTeX
 
-* NEXT Step 3: report
+* NEXT Toy paper v2: sentences, LFs, derivations
+  =examples/toy/paper.tex= rewritten Heim & Kratzer style: lexicon as typed
+  λ-terms, TN + FA, meaning postulate (phonologist ⊆ linguist), entailment
+  over models, numbered sentences (1)–(6) with LFs, a displayed derivation,
+  predictions (some labelled, some only in running text).
+  Answer key =EXPECTED.md=: 14 claims, 4 planted errors (mis-derived TC of
+  (4); (3) ⊨ (6) via false Prop 4; (2) ⊨ (3) existential import; Prop 4).
+  Old run kept in =runs/toy-v1/=.
+  - [X] Extract on v2 (unchanged prompt): all 14 claims found incl. 5 in
+        running text; all 4 planted errors flagged with correct countermodels
+  - [X] Hand-written prototype =examples/toy/Fragment.lean=: executable
+        fragment. ⟦·⟧ computed from LF trees by TN + FA over finite models
+        (D_t = Bool); =#eval= checks each TC/prediction by searching all
+        admissible models up to size 3 and prints ✓ or the countermodel.
+        Output matches =EXPECTED.md= exactly (10 ✓/✗ checks, <1s)
+  - [ ] Note: ✓ is only a /bounded/ check (no countermodel ≤ 3 entities); ✗
+        gives a genuine countermodel. Proofs still needed for ✓ claims —
+        ideally about the /same/ interpreter, so #eval and theorems agree
+  - [ ] Decide how the pipeline produces this: fixed library (types, trees,
+        FA, model enumeration, checkers) + model writes only paper-specific
+        parts (vocabulary, lexicon, LFs, stated TCs), vs. model writes it all
+  - [ ] Extract: add an =example= kind (numbered sentence + LF) so Defs can
+        define each sentence's LF once, shared by all claims
+  - [ ] Re-run defs + claims on v2
+
+* TODO Step 3: report
   - [ ] =runs/<paper>/report.md=: table of claims × outcome, with links to Lean files
   - [ ] Include the extract-step =concerns= alongside each outcome
 
 * TODO Later / maybe
+  - [ ] *Build on linglib* (deferred 2026-11-05; next step would be
+        rewriting =examples/toy/Fragment.lean= on top of it) (=../linglib=, Lean 4.35 + Mathlib, built).
+        Has =Montague.Ty=, =Lexicon=, =PhraseStructure.Tree.interp= (type-driven
+        FA/PM/PA), =Quantifier.Det.every/some/no= with conservativity and
+        monotonicity theorems (=restrictorMonotone_some= refutes Prop 4 directly),
+        and a Heim & Kratzer study with a toy model. Findings so far:
+        - imports work via =lake env lean <file>= run from =../linglib= (~20s/file)
+        - D_t is =Prop=; =every=/=some= have no =Decidable= instances, so =#eval=
+          needs a small decidability layer over finite (=Fintype=) models
+        - pipeline prompts would need a curated linglib cheat sheet (2350 files)
+        - user's clone is on branch =human-review-status= with local edits: pin a commit
   - [ ] *Do the build properly*: stop pasting =Defs.lean= into every claim file.
         Either compile =Defs.olean= once and set =LEAN_PATH=, or make =runs/<paper>/=
         a Lake project so claim files can =import Defs=. Needed before real
