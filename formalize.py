@@ -19,23 +19,38 @@ import json
 import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).parent
 PROMPTS = ROOT / "prompts"
 RUNS = ROOT / "runs"
 
+SYSTEM_PROMPT = "You are a careful assistant. Follow the user's instructions exactly."
+
 
 def call_claude(prompt: str, schema: dict) -> dict:
-    """Send one prompt to `claude -p` (no tools) and return its JSON answer."""
+    """Send one prompt to `claude -p` (no tools) and return its JSON answer.
+
+    Each call starts from a fresh, isolated context: run from an empty temp
+    directory (no CLAUDE.md, auto-memory, git status, or repo path) with a
+    minimal system prompt, no settings, MCP servers, or skills. The prompt is
+    all the model knows.
+    """
     cmd = [
         "claude", "-p",
         "--tools", "",                  # pure text-in/text-out, no file access
         "--no-session-persistence",
+        "--system-prompt", SYSTEM_PROMPT,
+        "--setting-sources", "",
+        "--strict-mcp-config",
+        "--disable-slash-commands",
         "--output-format", "json",
         "--json-schema", json.dumps(schema),
     ]
-    out = subprocess.run(cmd, input=prompt, capture_output=True, text=True, check=True)
+    with tempfile.TemporaryDirectory() as cwd:
+        out = subprocess.run(cmd, input=prompt, capture_output=True, text=True,
+                             check=True, cwd=cwd)
     reply = json.loads(out.stdout)
     if reply.get("is_error"):
         sys.exit(f"claude returned an error: {reply.get('result')}")
@@ -54,14 +69,15 @@ CLAIMS_SCHEMA = {
                 "type": "object",
                 "properties": {
                     "id": {"type": "string"},
-                    "kind": {"enum": ["definition", "claim"]},
+                    "kind": {"enum": ["definition", "example", "claim"]},
                     "label": {"type": "string"},
                     "latex": {"type": "string"},
                     "statement": {"type": "string"},
+                    "lf": {"type": "string"},
                     "depends_on": {"type": "array", "items": {"type": "string"}},
                     "concerns": {"type": "string"},
                 },
-                "required": ["id", "kind", "label", "latex", "statement",
+                "required": ["id", "kind", "label", "latex", "statement", "lf",
                              "depends_on", "concerns"],
             },
         }
@@ -70,14 +86,46 @@ CLAIMS_SCHEMA = {
 }
 
 
+def locate(tex: str, latex: str) -> dict | None:
+    """Where `latex` occurs verbatim in `tex` (up to whitespace): lines and section."""
+    norm, pos = [], []                  # tex with whitespace runs collapsed, and
+    for i, c in enumerate(tex):         # each kept character's offset in tex
+        if c.isspace():
+            if norm and norm[-1] == " ":
+                continue
+            c = " "
+        norm.append(c)
+        pos.append(i)
+    needle = " ".join(latex.split())
+    k = "".join(norm).find(needle) if needle else -1
+    if k < 0:
+        return None
+    start, end = pos[k], pos[k + len(needle) - 1]
+    sections = re.findall(r"\\(?:sub)*section\*?\{([^}]*)\}", tex[:start])
+    return {"lines": [tex.count("\n", 0, start) + 1, tex.count("\n", 0, end) + 1],
+            "section": sections[-1] if sections else None}
+
+
 def extract(paper: Path, run_dir: Path) -> None:
     print(f"extract: {paper} -> {run_dir}/claims.json")
-    prompt = (PROMPTS / "extract.md").read_text() + paper.read_text()
-    result = call_claude(prompt, CLAIMS_SCHEMA)
-    (run_dir / "claims.json").write_text(json.dumps(result, indent=2) + "\n")
+    tex = paper.read_text()
+    result = call_claude((PROMPTS / "extract.md").read_text() + tex, CLAIMS_SCHEMA)
+    seen = set()
     for item in result["items"]:
-        flag = "  ⚠ " + item["concerns"] if item["concerns"] else ""
-        print(f"  {item['id']:8} {item['kind']:10} {item['label']}{flag}")
+        # Located by us, not the model; not found means `latex` isn't verbatim.
+        item["source"] = locate(tex, item["latex"])
+        problems = [f"depends on unknown or later item {d}"
+                    for d in item["depends_on"] if d not in seen]
+        if item["id"] in seen:
+            problems.append("duplicate id")
+        if item["source"] is None:
+            problems.append("latex not found verbatim in the paper")
+        seen.add(item["id"])
+        where = f"l.{item['source']['lines'][0]}" if item["source"] else "l.?"
+        print(f"  {item['id']:16} {item['kind']:10} {where:6} {item['label']}")
+        for flag in problems + ([item["concerns"]] if item["concerns"] else []):
+            print(f"      ⚠ {flag}")
+    (run_dir / "claims.json").write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n")
 
 
 # --- Lean compile loop -------------------------------------------------------

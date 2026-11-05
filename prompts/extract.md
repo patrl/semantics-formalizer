@@ -1,21 +1,37 @@
 You are helping formalize a formal-semantics paper in Lean 4.
 
-Below is the LaTeX source of the paper. Extract every **definition** and every
-**claim** (proposition, theorem, lemma, corollary, fact, or an informal
-entailment claim stated in running text) in the order it appears.
+Below is the LaTeX source of the paper. Extract, in the order they appear:
+
+- every **definition**: numbered definitions, and also unnumbered
+  stipulations that later material relies on (e.g. the type theory, what a
+  model is, the LFs assumed in running text);
+- every **example**: each numbered example sentence, e.g. `\ex` items or
+  `(1)`, `(2)`, … in an `exe`/`examples` environment;
+- every **claim**: proposition, theorem, lemma, corollary, fact, prediction,
+  derived truth condition, or an informal claim stated in running text (e.g.
+  "so (2) entails (3)", "this gives the truth conditions …").
 
 For each item give:
 
-- `id`: a short stable identifier, e.g. `def1`, `prop3` (use the paper's own
-  numbering where it has one).
-- `kind`: `"definition"` or `"claim"`.
-- `label`: the paper's own name for it, e.g. `"Proposition 3"`.
-- `latex`: the exact LaTeX of the item, copied verbatim.
+- `id`: a short stable identifier, e.g. `def1`, `prop3`, `ex2` (use the
+  paper's own numbering where it has one).
+- `kind`: `"definition"`, `"example"`, or `"claim"`.
+- `label`: the paper's own name for it, e.g. `"Proposition 3"`, `"(2)"`, or
+  a short description for unlabelled items, e.g. `"Truth conditions of (3)"`.
+- `latex`: the item's LaTeX, copied **verbatim** as one contiguous span of
+  the source (it will be located in the source mechanically, so don't
+  reformat, abridge, or expand macros). For an item stated in running text,
+  the shortest contiguous span that contains it.
 - `statement`: a precise, self-contained plain-English restatement. Spell out
   quantifiers and expand any notation, but do **not** fix, strengthen, or
-  weaken the claim — transcribe what the paper says, even if you think it is
-  wrong.
-- `depends_on`: ids of earlier definitions this item uses.
+  weaken the item — transcribe what the paper says, even if you think it is
+  wrong. For an example, the sentence itself.
+- `lf`: for an example, its LF in the paper's own notation (e.g.
+  `[S [DP every linguist] sneezed]`); for anything else, an empty string. If
+  the paper gives the LF only indirectly ("(3)–(6) are parallel"), write it
+  out and say so in `concerns`. If the paper gives none, leave it empty and
+  say so in `concerns`.
+- `depends_on`: ids of earlier definitions and examples this item uses.
 - `concerns`: anything ambiguous, underspecified, or possibly false about the
   item as stated (empty string if none). This is where doubts go — not into
   `statement`.

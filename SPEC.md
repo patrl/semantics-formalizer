@@ -55,7 +55,7 @@ Everything goes in one run directory per paper (currently `runs/<paper>/`).
 | Artifact | Contents |
 |---|---|
 | `source/` | The preprocessed paper (flattened, macros expanded, or converted from PDF) plus the original (§2) |
-| `claims.json` | Extracted items: id, kind (`definition` / `claim` / `example`), label, source location, verbatim LaTeX, faithful informal statement, dependencies, concerns, **user-approval status** |
+| `claims.json` | Extracted items: id, kind (`definition` / `claim` / `example`), label, verbatim LaTeX, faithful informal statement, LF (examples), dependencies, concerns, and source location (computed by the runner by finding the verbatim LaTeX in the source, never reported by the model). Approval status is not stored here: it lives in `decisions.json` |
 | `Defs.lean` | The theory: types, lexicon, composition rules, model class, definitions, numbered examples and their LFs |
 | `statements.json` | Per claim: its Lean statement (a closed `Prop`, from stage 3) and notes. Frozen once approved: stage 4 proves or refutes exactly this |
 | `claims/<id>.lean` | One file per claim: a theorem `<id>` (proved) or `<id>_false : ¬ …` (refuted, with a counterexample) |

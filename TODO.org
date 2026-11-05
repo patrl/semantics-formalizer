@@ -21,6 +21,17 @@ Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
   - [X] Prompt in =prompts/extract.md=
   - [X] Separate faithful =statement= from =concerns=
   - [X] Tested: all 9 items extracted; Props 4 and 5 flagged with correct counterexamples
+  - [X] =example= kind (numbered sentences) with an =lf= field; LFs the paper
+        only implies ("parallel") are written out and flagged in =concerns=
+  - [X] Source location computed by the runner (=locate()=: verbatim =latex=
+        found in the source up to whitespace → lines + section), never by the
+        model; not found = =latex= isn't verbatim → warning, =source: null=.
+        Checked on the v2 extraction: all 22 spans found
+  - [X] Runner warns on duplicate ids and =depends_on= naming unknown/later items
+  - [X] Approval status kept out of =claims.json= (SPEC.md: =decisions.json= only)
+  - [ ] Live test of the new prompt on toy v2 (not yet run)
+  - [ ] Defs stage doesn't consume examples yet: blocked on how LFs are
+        represented (see "Decide how the pipeline produces this" under Toy v2)
 
 * DONE Step 2a: shared definitions
   =python3 formalize.py defs examples/toy/paper.tex= → =runs/toy/Defs.lean=
@@ -99,8 +110,8 @@ Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
   - [ ] Decide how the pipeline produces this: fixed library (types, trees,
         FA, model enumeration, checkers) + model writes only paper-specific
         parts (vocabulary, lexicon, LFs, stated TCs), vs. model writes it all
-  - [ ] Extract: add an =example= kind (numbered sentence + LF) so Defs can
-        define each sentence's LF once, shared by all claims
+  - [X] Extract: add an =example= kind (numbered sentence + LF) so Defs can
+        define each sentence's LF once, shared by all claims (Defs side still to do)
   - [ ] Re-run defs + state + prove on v2
 
 * TODO Checkpoints (SPEC.md §4)
