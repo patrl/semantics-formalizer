@@ -125,11 +125,30 @@ Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
 * TODO Agent and model independence (SPEC.md §4, §8)
   Future-proofing; only Claude is tested and supported for now (README says so).
   - [ ] Replace =call_claude()= with a backend interface: prompt + JSON
-        schema in, schema-valid JSON + cost/time out; =claude -p= is the
+        schema + tool allowlist (empty by default) in, schema-valid JSON +
+        cost/time out; =claude -p= is the
         first backend. Fake-model tests use the same interface
   - [ ] Validate replies against the schema in the runner, not only via the
         backend's own schema option
   - [ ] A second backend (e.g. Codex) only once the acceptance suite passes on it
+
+* TODO Lean MCP, when it makes sense (SPEC.md §4 "Tools for model calls")
+  Not now: the toy paper is core Lean and proves on attempt 1. Adopt when a
+  trigger fires, and keep only if the comparison favours it.
+  Triggers: (1) a run depends on linglib / Mathlib; (2) proving often ends
+  =open= for lack of attempts, or averages > ~2 attempts per claim.
+  - [ ] Baseline now: record attempts, cost, time per claim on the toy
+        acceptance run (=results.json= already has attempts)
+  - [ ] Prerequisites: backend tool allowlist (above); run dir as a Lake
+        project ("Do the build properly"); pin =lean-lsp-mcp= next to the toolchain
+  - [ ] Stage 4 (prove/refute) first: allowlist = Lean MCP only; final file
+        still compiled from scratch + =audit()=; fallback to compile loop on
+        backends without MCP
+  - [ ] Compare with vs. without on the same papers (outcomes, attempts, cost,
+        time); record the result here; enable only if outcomes ≥ baseline
+  - [ ] Then stage 2 (defs), same comparison. Stage 3: lemma search only
+  - [ ] Never for extract, back-translation, compare (isolation)
+  - [ ] Replaces the "curated linglib cheat sheet" idea under Later if search works
 
 * TODO Outcomes (SPEC.md §5)
   - [ ] Rename outcomes to =proved= / =refuted= / =open= / =blocked=
@@ -169,8 +188,13 @@ Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
         Needed before real papers (big Defs, Mathlib)
 
 * TODO Inputs (SPEC.md §2)
-  - [ ] Multi-file LaTeX (=\input= / =\include=) and author macros
-  - [ ] PDF input (tool choice is an open decision); formulas confirmed by the user
+  - [ ] Deterministic preprocessing in the runner → =runs/<paper>/source/=
+        (no LaTeX MCP; SPEC.md §2)
+  - [ ] Multi-file LaTeX (=\input= / =\include=): flatten, e.g. =latexpand=
+  - [ ] Author macros: expand (=de-macro= or own expander); keep original
+        text for quoting in review files
+  - [ ] PDF input via converter (Marker / Mathpix; choice is an open
+        decision); formulas confirmed by the user
   - [ ] User notes ("Def 3 is intensional", "ignore §6") passed to every step
 
 * TODO Acceptance suite (SPEC.md §10)
@@ -191,7 +215,8 @@ Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
         - imports work via =lake env lean <file>= run from =../linglib= (~20s/file)
         - D_t is =Prop=; =every=/=some= have no =Decidable= instances, so =#eval=
           needs a small decidability layer over finite (=Fintype=) models
-        - pipeline prompts would need a curated linglib cheat sheet (2350 files)
+        - pipeline prompts would need a curated linglib cheat sheet (2350 files),
+          unless Lean MCP lemma search covers it (see Lean MCP)
         - user's clone is on branch =human-review-status= with local edits: pin a commit
   - [ ] Suggested repairs as separate proposals the user can accept (SPEC.md §9)
   - [ ] Web review page (SPEC.md §11), only if conversation review is too painful

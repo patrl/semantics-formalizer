@@ -35,6 +35,18 @@ that makes the theory precise and tells the author where it breaks.
     reads and ask them to confirm it.
 - **Optional**: notes from the user, such as "Def 3 is meant
   intensionally" or "ignore §6". These go into every later step.
+- **Preprocessing** is deterministic and done by the runner, once, before
+  any model call. Its output is saved in the run directory (`source/`) and
+  every later stage reads it from there:
+  - multi-file LaTeX is flattened (e.g. `latexpand`);
+  - author macros are expanded (e.g. `de-macro`, or the runner's own
+    expander), keeping the original next to the expanded text so the
+    review file can quote the paper as written;
+  - a PDF is converted to LaTeX by an external converter (e.g. Marker,
+    Mathpix), followed by the user confirmation above.
+
+  Model calls never do this work themselves, and no LaTeX tool or MCP is
+  given to them.
 
 ## 3. Outputs
 
@@ -42,6 +54,7 @@ Everything goes in one run directory per paper (currently `runs/<paper>/`).
 
 | Artifact | Contents |
 |---|---|
+| `source/` | The preprocessed paper (flattened, macros expanded, or converted from PDF) plus the original (§2) |
 | `claims.json` | Extracted items: id, kind (`definition` / `claim` / `example`), label, source location, verbatim LaTeX, faithful informal statement, dependencies, concerns, **user-approval status** |
 | `Defs.lean` | The theory: types, lexicon, composition rules, model class, definitions, numbered examples and their LFs |
 | `claims/<id>.lean` | One file per claim: a theorem `<id>` (proved) or `<id>_false : ¬ …` (refuted, with a counterexample) |
@@ -72,9 +85,11 @@ There are two layers, kept apart:
 Nothing in the design depends on a particular agent or model vendor:
 
 - **The runner's model calls** go through one backend interface: a
-  prompt and a JSON schema in, schema-valid JSON plus usage (cost, time)
-  out. `claude -p` is one backend. Any other must pass the same interface
-  and the acceptance suite (§10) before it is supported.
+  prompt, a JSON schema and a **tool allowlist** (empty by default) in,
+  schema-valid JSON plus usage (cost, time) out. `claude -p` is one
+  backend. Any other must pass the same interface and the acceptance
+  suite (§10) before it is supported. The runner validates every reply
+  against the schema itself.
 - **The orchestrator's instructions** are one plain markdown file in the
   repo. Each agent gets a thin pointer to that file: a Claude Code skill,
   an `AGENTS.md` entry for Codex and similar agents. The pointers hold no
@@ -86,6 +101,51 @@ Nothing in the design depends on a particular agent or model vendor:
 - **Checks that need isolation are run by the runner**, as separate
   backend calls, never by the agent's own sub-agents. Code then enforces
   what each call can see, whatever agent drives the run.
+
+### Tools for model calls
+
+By default every model call is text in, JSON out, with no tools. Lean
+feedback comes only from the runner's compile-and-retry loop (compile the
+whole file, run `audit()`, return the errors, at most N attempts). Tools
+are added per stage, by the runner's allowlist, and only where they pay
+for themselves.
+
+**Lean MCP** (e.g. `lean-lsp-mcp`) gives a call goal states, diagnostics
+while it writes, and lemma search (Loogle / LeanSearch-style).
+
+- **Which stages may use it:** only the stages that write Lean, i.e.
+  definitions (stage 2) and prove/refute (stage 4). Stage 3 (stating
+  claims) may use it for lemma *search* only, never to try proofs, so
+  that whether a statement can be proved doesn't shape how it is stated.
+- **Which stages never use it:** extraction, back-translation and
+  comparison, and every other check that needs isolation. Hover text,
+  docstrings and file outlines would leak the intended meaning to the
+  translator.
+- **What it does not change:**
+  - only the final file decides the outcome. It is compiled from scratch
+    and must pass `audit()`. Nothing the MCP reports during the call
+    counts;
+  - a call with the Lean MCP gets no other tools: no file writes, no
+    shell. It returns its Lean as JSON like any other call;
+  - a backend without MCP support still works, by falling back to the
+    compile-and-retry loop.
+- **Prerequisites:** the run directory is a Lake project (§8), so the MCP
+  sees `Defs.lean` and the dependencies the way the final compile does;
+  the MCP's version is pinned next to the Lean toolchain.
+- **When to turn it on.** It is adopted when either trigger fires, and
+  kept only if the comparison below favours it:
+  1. the run depends on a large library (linglib, Mathlib), where lemma
+     names can't be guessed and the alternative is a hand-written cheat
+     sheet;
+  2. on the acceptance suite or a real paper, the proving stage often
+     ends **open** for lack of attempts, or takes more than ~2 attempts
+     per claim on average.
+- **How to adopt it:** the proving stage is run on the same papers with
+  and without the MCP, and compared on outcomes, attempts, cost and time.
+  The MCP is enabled for a stage only if outcomes are at least as good
+  and the cost is acceptable. The comparison is recorded in `TODO.org`,
+  and the allowlist per stage is part of the run's config so a run can
+  always be repeated without it.
 
 ### Who decides
 
@@ -292,7 +352,9 @@ predictions.
   an agent (`--auto`, or editing review files by hand), so it can be tested
   on its own.
 - Requires: a Lean toolchain (pinned version), and access to a supported
-  model backend (§4).
+  model backend (§4). Optional: `lean-lsp-mcp`, pinned, for the stages
+  that allow it (§4, "Tools for model calls"); LaTeX and PDF
+  preprocessing tools (§2).
 - **Supported** means the acceptance suite (§10) has passed with that
   backend and agent. So far the only backend is `claude -p` and the only
   target agent is Claude Code; the README says the project is tested only
