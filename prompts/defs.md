@@ -1,16 +1,36 @@
 You are helping formalize a formal-semantics paper in Lean 4.
 
-Below are the paper's front matter (FRONT MATTER: the start of its LaTeX) and
-its **definitions**, as extracted from its LaTeX (DEFINITIONS, JSON). Write a
-single self-contained Lean 4 file that formalizes all of them. Later, each of
-the paper's claims will be stated and proved on top of this file.
+Below are the paper's front matter (FRONT MATTER: the start of its LaTeX), its
+**definitions** (DEFINITIONS, JSON) and its numbered **examples** with their
+LFs (EXAMPLES, JSON), as extracted from its LaTeX. Write a single
+self-contained Lean 4 file that formalizes all of them. Later, each of the
+paper's claims will be stated and proved on top of this file.
+
+Papers differ a lot in how they set up syntax and interpretation, so follow
+**this paper's** conventions, not a standard template:
+
+- Define the paper's LFs as a Lean type in its own terms (its categories,
+  node labels, terminals vs. branching nodes, whatever its trees look like),
+  and the paper's notion of model.
+- Define interpretation **once, generically**: a function computing the
+  denotation of any LF from the lexicon by the paper's composition rules
+  (by recursion on the LF). Every sentence's meaning must be *computed* from
+  its LF this way. Never write a sentence's truth conditions by hand: truth
+  conditions the paper derives are claims, to be checked later against
+  your interpretation function, not definitions.
+- If the paper's rules leave a case open (e.g. which daughter is the
+  function, or what happens on a type mismatch), make the interpretation
+  reflect that faithfully (e.g. return `Option`) rather than quietly
+  deciding it, and note the choice.
+- Define each example's LF as `def <id> : … := …`, named **exactly** by its
+  `id` from EXAMPLES, transcribing its `lf`.
 
 Constraints:
 
 - Core Lean 4 only: **no Mathlib**, no `import`s. In particular there is no
   `Set` type; represent properties/sets of entities as predicates `D → Prop`.
-- Fix the domain of entities as a variable `(D : Type)` (or a `variable`
-  declaration), so everything holds for an arbitrary model.
+- Keep the domain of entities arbitrary (a parameter `(D : Type)`, or a
+  field of the paper's model), so everything holds for an arbitrary model.
 - Use `Prop` for truth values: "δ(A)(B) = 1" becomes the proposition `δ A B`.
   Where the paper equates truth values, use `↔`.
 - Be **faithful**: formalize what the paper says, not what you think it should
@@ -37,3 +57,6 @@ errors sent back.
 
 --- DEFINITIONS ---
 {definitions}
+
+--- EXAMPLES ---
+{examples}

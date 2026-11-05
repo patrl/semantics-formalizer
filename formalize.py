@@ -263,6 +263,16 @@ def write_lean(task: str, out_path: Path, schema: dict = LEAN_SCHEMA,
     return None
 
 
+BULKY = ("defs", "claim", "statement", "front_matter", "definitions", "examples")
+
+
+def fill(template: str, **fields: str) -> str:
+    """Fill {field} placeholders; the bulky ones (defs, claim) go in last."""
+    for key in sorted(fields, key=lambda k: k in BULKY):
+        template = template.replace("{" + key + "}", fields[key])
+    return template
+
+
 # --- Step 2: shared definitions ----------------------------------------------
 
 DEFS_SCHEMA = {
@@ -278,6 +288,16 @@ def front_matter(paper: Path) -> str:
     tex = paper.read_text()
     m = re.search(r"\\section\b", tex)
     return tex[:m.start()] if m else tex[:3000]
+
+
+def check_examples(ids: list[str]):
+    """Defs.lean must define each example's LF under the example's own id."""
+    def check(answer: dict) -> list[str]:
+        bare = strip_comments(answer["lean"])
+        return [f"no definition named `{i}` (the LF of example {i})" for i in ids
+                if not re.search(rf"(?m)^\s*(?:@\[[^\]]*\]\s*)?(?:noncomputable\s+)?"
+                                 rf"(?:def|abbrev)\s+{re.escape(i)}\b", bare)]
+    return check
 
 
 def check_namespace(answer: dict) -> list[str]:
@@ -299,10 +319,13 @@ def defs(paper: Path, run_dir: Path) -> None:
     print(f"defs: {run_dir}/claims.json -> {run_dir}/Defs.lean")
     items = json.loads((run_dir / "claims.json").read_text())["items"]
     definitions = [i for i in items if i["kind"] == "definition"]
-    task = ((PROMPTS / "defs.md").read_text()
-            .replace("{front_matter}", front_matter(paper))
-            .replace("{definitions}", json.dumps(definitions, indent=2)))
-    answer = write_lean(task, run_dir / "Defs.lean", DEFS_SCHEMA, check=check_namespace)
+    examples = [i for i in items if i["kind"] == "example"]
+    task = fill((PROMPTS / "defs.md").read_text(), front_matter=front_matter(paper),
+                definitions=json.dumps(definitions, indent=2, ensure_ascii=False),
+                examples=json.dumps(examples, indent=2, ensure_ascii=False))
+    has_examples = check_examples([e["id"] for e in examples])
+    answer = write_lean(task, run_dir / "Defs.lean", DEFS_SCHEMA,
+                        check=lambda a: check_namespace(a) + has_examples(a))
     if answer:
         (run_dir / "Defs.notes.md").write_text(answer["notes"] + "\n")
         print("  notes:\n    " + answer["notes"].replace("\n", "\n    "))
@@ -328,13 +351,6 @@ def load_defs(run_dir: Path) -> tuple[str, str]:
     # see TODO.org for doing this properly (olean + LEAN_PATH, or Lake).
     defs_lean = (run_dir / "Defs.lean").read_text().rstrip("\n") + "\n\n"
     return defs_lean, paper_namespace(defs_lean)
-
-
-def fill(template: str, **fields: str) -> str:
-    """Fill {field} placeholders; the bulky ones (defs, claim) go in last."""
-    for key in sorted(fields, key=lambda k: k in ("defs", "claim", "statement")):
-        template = template.replace("{" + key + "}", fields[key])
-    return template
 
 
 def state(run_dir: Path, only: str | None = None) -> None:

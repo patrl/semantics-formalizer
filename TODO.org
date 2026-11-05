@@ -44,8 +44,8 @@ Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
         definitions; =pred1= cites =prop2=, (3) ⊨ (6) cites =prop4=; all 4
         planted errors flagged; all spans located; no warnings. Residual
         noise: one concern comments on its own field choice (=pred1=)
-  - [ ] Defs stage doesn't consume examples yet: blocked on how LFs are
-        represented (see "Decide how the pipeline produces this" under Toy v2)
+  - [X] Defs stage consumes examples (EXAMPLES block in =defs.md=); runner
+        checks each example id is a =def=/=abbrev= in Defs.lean
 
 * DONE Step 2a: shared definitions
   =python3 formalize.py defs examples/toy/paper.tex= → =runs/toy/Defs.lean=
@@ -121,12 +121,22 @@ Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
   - [ ] Note: ✓ is only a /bounded/ check (no countermodel ≤ 3 entities); ✗
         gives a genuine countermodel. Proofs still needed for ✓ claims —
         ideally about the /same/ interpreter, so #eval and theorems agree
-  - [ ] Decide how the pipeline produces this: fixed library (types, trees,
-        FA, model enumeration, checkers) + model writes only paper-specific
-        parts (vocabulary, lexicon, LFs, stated TCs), vs. model writes it all
+  - [X] Decided 2026-11-05 (SPEC.md §11): model writes it all, per paper —
+        papers' conventions differ too much for a fixed library (for now).
+        =defs.md=: paper's own LF type + model notion; interpretation defined
+        once by its composition rules, recursing on LFs; open cases (e.g.
+        daughter order) kept open (=Option=) not decided quietly; never hand-
+        written sentence TCs. =state.md=: sentence claims go through the LFs
+        and interpreter
   - [X] Extract: add an =example= kind (numbered sentence + LF) so Defs can
         define each sentence's LF once, shared by all claims (Defs side still to do)
-  - [ ] Re-run defs + state + prove on v2
+  - [X] Defs on v2 (isolated, 2 attempts, $0.40): typed semantics (=Ty=,
+        =Ty.denote=), =Model= structure (D may be empty), LF trees with =Cat=
+        labels, one generic =interp= (TN + order-free FA, =Option= on type
+        mismatch), =IsTrue=, =Entails=/=Contradictory= over postulate-respecting
+        models, =ex1=–=ex6= as LF defs. No hand-written sentence TCs.
+        Interpretive choices in =runs/toy/Defs.notes.md= (checkpoint 2)
+  - [ ] State + prove on v2 (stop after =state= to review statements)
 
 * TODO Checkpoints (SPEC.md §4)
   Settled 2026-11-05: runner halts → =review/<stage>.md= → orchestrator skill
@@ -273,6 +283,6 @@ Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
           unless Lean MCP lemma search covers it (see Lean MCP)
         - user's clone is on branch =human-review-status= with local edits: pin a commit
   - [ ] Suggested repairs as separate proposals the user can accept (SPEC.md §9)
-  - [ ] Web review page (SPEC.md §11), only if conversation review is too painful
+  - [ ] Web review page (SPEC.md §12), only if conversation review is too painful
   - [ ] Trim cost with =--system-prompt= (Claude Code's default prompt is ~14k tokens/call)
   - [ ] Mathlib, if real papers need it (sets, lattices, cardinality)

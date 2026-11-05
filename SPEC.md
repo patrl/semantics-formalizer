@@ -442,13 +442,21 @@ and is never shown to the pipeline.
 Before calling the project usable, add at least one real published
 semantics paper with a hand-checked answer key.
 
-## 11. Open decisions
+## 11. Decided
 
-- **Fixed library vs. generated fragment**: does the tool ship a fixed
-  library (types, trees, FA/PM/PA, model enumeration, checkers) and have
-  the model write only paper-specific parts, or does the model write
-  everything? A library keeps the oracle trustworthy and the same across
-  papers, but limits which theories can be expressed.
+- **Generated fragment, not a fixed library** (2026-11-05, for now): the
+  model writes each paper's LF syntax, model notion and interpretation in
+  `Defs.lean`, because papers use very different conventions. The
+  interpretation is defined once, generically, by the paper's composition
+  rules over LFs, and every numbered example is a `def` named by its id;
+  sentence truth conditions are never written by hand (the paper's derived
+  truth conditions are claims checked against the interpreter). Cost: the
+  interpreter is checked per paper (checkpoint 2, back-translation) rather
+  than once, and the oracle is rebuilt per paper. Revisit if a family of
+  papers shares enough machinery to justify a library.
+
+## 12. Open decisions
+
 - **Proofs about the executable interpreter**: how proofs and the
   `Bool`-valued `#eval` semantics are connected (one `Decidable`
   semantics, or two semantics plus an equivalence theorem).

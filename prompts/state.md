@@ -21,6 +21,11 @@ Constraints:
   `example : Prop := <statement>` inside `namespace {namespace}`, right
   after DEFINITIONS, so use the vocabulary there directly. Later it becomes
   the type of a theorem exactly as you write it.
+- A claim about the paper's sentences (truth conditions, entailments, …)
+  must go through their LFs and the interpretation function in DEFINITIONS
+  (e.g. the denotation of `ex2` in a model), never through truth
+  conditions you write out yourself: whether the paper's derivations are
+  right is exactly what is being checked.
 - The statement must be closed: bind everything it mentions with `∀` / `∃`,
   including the domain (e.g. `∀ (D : Type) (A B : D → Prop), …`), unless the
   paper's claim is about one specific model.
