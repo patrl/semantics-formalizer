@@ -148,13 +148,14 @@ def audit(code: str, log: str, forbidden: list[str],
 
 def write_lean(task: str, out_path: Path, schema: dict = LEAN_SCHEMA,
                prefix: str = "", forbidden: list[str] = ESCAPE_HATCHES,
-               theorem_name=None) -> dict | None:
+               theorem_name=None, check=None) -> dict | None:
     """Ask for Lean code, compile + audit it, feed problems back; up to MAX_ATTEMPTS.
 
     The file compiled is `prefix + answer["lean"]` (prefix = pasted-in
     definitions), plus `#print axioms` / `#check` for the main theorem if
-    `theorem_name(answer)` gives one. Every attempt is kept as
-    <name>.attemptN.lean / .log next to out_path. Returns the model's final
+    `theorem_name(answer)` gives one; `check(answer)`, if given, returns
+    further audit problems. Every attempt is kept as <name>.attemptN.lean /
+    .log next to out_path. Returns the model's final
     answer (plus audit facts) if it passed, else None.
     """
     prompt = task
@@ -169,6 +170,8 @@ def write_lean(task: str, out_path: Path, schema: dict = LEAN_SCHEMA,
         ok, log = compile_lean(attempt)
         log = shift_line_numbers(log, attempt.name, offset)
         problems, facts = audit(answer["lean"], log, forbidden, theorem)
+        if check:
+            problems += check(answer)
         if problems:
             log += "\n--- AUDIT ---\n" + "\n".join(f"audit: {p}" for p in problems) + "\n"
         attempt.with_suffix(".log").write_text(log)
@@ -189,12 +192,44 @@ def write_lean(task: str, out_path: Path, schema: dict = LEAN_SCHEMA,
 
 # --- Step 2a: shared definitions ---------------------------------------------
 
-def defs(run_dir: Path) -> None:
+DEFS_SCHEMA = {
+    "type": "object",
+    "properties": {"lean": {"type": "string"}, "namespace": {"type": "string"},
+                   "notes": {"type": "string"}},
+    "required": ["lean", "namespace", "notes"],
+}
+
+
+def front_matter(paper: Path) -> str:
+    """The paper's LaTeX up to its first \\section (title, authors, abstract)."""
+    tex = paper.read_text()
+    m = re.search(r"\\section\b", tex)
+    return tex[:m.start()] if m else tex[:3000]
+
+
+def check_namespace(answer: dict) -> list[str]:
+    """Defs.lean must be wrapped in the paper-specific namespace it reports."""
+    ns, bare = answer["namespace"], strip_comments(answer["lean"]).strip()
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_']*", ns):
+        return [f"namespace `{ns}` is not a single Lean identifier"]
+    if not (re.match(rf"namespace {re.escape(ns)}\s", bare) and bare.endswith(f"end {ns}")):
+        return [f"the code must begin with `namespace {ns}` and end with `end {ns}`"]
+    return []
+
+
+def paper_namespace(defs_lean: str) -> str:
+    """The namespace Defs.lean is wrapped in (its first `namespace`, by check_namespace)."""
+    return re.search(r"(?m)^namespace (\S+)", strip_comments(defs_lean)).group(1)
+
+
+def defs(paper: Path, run_dir: Path) -> None:
     print(f"defs: {run_dir}/claims.json -> {run_dir}/Defs.lean")
     items = json.loads((run_dir / "claims.json").read_text())["items"]
     definitions = [i for i in items if i["kind"] == "definition"]
-    task = (PROMPTS / "defs.md").read_text() + json.dumps(definitions, indent=2)
-    answer = write_lean(task, run_dir / "Defs.lean")
+    task = ((PROMPTS / "defs.md").read_text()
+            .replace("{front_matter}", front_matter(paper))
+            .replace("{definitions}", json.dumps(definitions, indent=2)))
+    answer = write_lean(task, run_dir / "Defs.lean", DEFS_SCHEMA, check=check_namespace)
     if answer:
         (run_dir / "Defs.notes.md").write_text(answer["notes"] + "\n")
         print("  notes:\n    " + answer["notes"].replace("\n", "\n    "))
@@ -218,6 +253,7 @@ def claims(run_dir: Path, only: str | None = None) -> None:
     # TODO: pasting Defs.lean into every claim file is the barebones option;
     # see TODO.org for doing this properly (olean + LEAN_PATH, or Lake).
     defs_lean = (run_dir / "Defs.lean").read_text().rstrip("\n") + "\n\n"
+    ns = paper_namespace(defs_lean)
     out_dir = run_dir / "claims"
     out_dir.mkdir(exist_ok=True)
     results_path = run_dir / "results.json"
@@ -229,13 +265,15 @@ def claims(run_dir: Path, only: str | None = None) -> None:
         print(f"claim {item['id']} ({item['label']}) -> claims/{item['id']}.lean")
         task = ((PROMPTS / "claim.md").read_text()
                 .replace("{id}", item["id"])
+                .replace("{namespace}", ns)
                 .replace("{defs}", defs_lean)
                 .replace("{claim}", json.dumps(item, indent=2, ensure_ascii=False)))
         cid = item["id"]
         answer = write_lean(
             task, out_dir / f"{cid}.lean", CLAIM_SCHEMA, defs_lean,
             forbidden=ESCAPE_HATCHES + NEW_DEFINITIONS,
-            theorem_name=lambda a: cid if a["verdict"] == "proved" else f"{cid}_false")
+            theorem_name=lambda a: f"{ns}.{cid}" if a["verdict"] == "proved"
+                                   else f"{ns}.{cid}_false")
         if answer:
             results[cid] = {"outcome": answer["verdict"],
                             "attempts": answer["attempts"],
@@ -264,7 +302,7 @@ def main() -> None:
     if step == "extract":
         extract(paper, run_dir)
     elif step == "defs":
-        defs(run_dir)
+        defs(paper, run_dir)
     elif step == "claims":
         claims(run_dir, sys.argv[3] if len(sys.argv) == 4 else None)
 

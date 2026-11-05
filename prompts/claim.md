@@ -23,8 +23,8 @@ reading and say which in `notes`.
 Constraints:
 
 - Your code is **appended** to the DEFINITIONS file, so don't repeat or
-  redefine anything from it, and don't add `import`s. Start with
-  `open Semantics` (or `namespace Semantics … end Semantics`).
+  redefine anything from it, and don't add `import`s. Put all your code
+  inside `namespace {namespace} … end {namespace}`, the paper's namespace.
 - Core Lean 4 only, no Mathlib. No `sorry`, `admit`, `axiom`,
   `native_decide`, `unsafe`, `implemented_by`, or `extern`.
 - **No new definitions** (`def`, `abbrev`, `structure`, `inductive`,

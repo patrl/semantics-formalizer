@@ -31,6 +31,12 @@ Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
         out and flagged as an interpretation; ↑MON *not* invented
   - [X] Retry path exercised (see Step 2c fake-model test)
   - [X] Tweak prompt: model's notes claim "not compiled" (it can't see our compile step)
+  - [X] Paper-specific namespace (e.g. =DeterminersAsRelations=, not =Semantics=):
+        model picks it from the paper's front matter (LaTeX before the first
+        =\section=) and returns it in =namespace=; =check_namespace()= audits that
+        Defs.lean is wrapped in it. =claim.md= gets it as ={namespace}=; claim
+        code goes inside it and the audited theorem is =<Namespace>.<id>=.
+        Tested offline with a fake model on toy-v1 outputs; not yet rerun live
 
 * DONE Step 2b: formalize claims
   For each =claim=: one Lean file building on =Defs.lean=, with a theorem
