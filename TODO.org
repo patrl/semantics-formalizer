@@ -99,12 +99,13 @@ Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
 
 * TODO Checkpoints (SPEC.md §4)
   Settled 2026-11-05: runner halts → =review/<stage>.md= → orchestrator skill
-  walks the user through it in Claude Code → =decisions.json= → =--resume=.
+  walks the user through it in the conversation → =decisions.json= → =--resume=.
   Modelled on PaperFormalizer's runner/orchestrator split; no web page for now.
   - [ ] Runner: halt/resume with state on disk; read =decisions.json=
   - [ ] Review files: LaTeX, =#check=, blind back-translation, example models,
         recommendation, =decision:= line
-  - [ ] Blind back-translation (SPEC.md §4): isolated sub-agent sees only
+  - [ ] Blind back-translation (SPEC.md §4): separate backend call made by
+        the runner (not an agent sub-agent) sees only
         comment-stripped Lean + glossary → surface + unfolded English
         (mechanical =unfold=/=simp only= where possible); compare step
         classes differences substantive / wording; only substantive flags
@@ -116,7 +117,19 @@ Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
   - [ ] Example models in review files (stages 2–3), from the executable
         fragment — needs Oracle below
   - [ ] =--auto= mode, output marked unreviewed
-  - [ ] Orchestrator skill (=.claude/skills/=)
+  - [ ] Orchestrator instructions as one plain markdown file; thin pointers
+        to it: Claude Code skill (=.claude/skills/=) and =AGENTS.md=
+  - [ ] Structured (multiple-choice) questions where the agent has them,
+        plain text otherwise
+
+* TODO Agent and model independence (SPEC.md §4, §8)
+  Future-proofing; only Claude is tested and supported for now (README says so).
+  - [ ] Replace =call_claude()= with a backend interface: prompt + JSON
+        schema in, schema-valid JSON + cost/time out; =claude -p= is the
+        first backend. Fake-model tests use the same interface
+  - [ ] Validate replies against the schema in the runner, not only via the
+        backend's own schema option
+  - [ ] A second backend (e.g. Codex) only once the acceptance suite passes on it
 
 * TODO Outcomes (SPEC.md §5)
   - [ ] Rename outcomes to =proved= / =refuted= / =open= / =blocked=

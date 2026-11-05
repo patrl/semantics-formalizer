@@ -62,10 +62,30 @@ There are two layers, kept apart:
 - **The runner** (`formalize.py`): runs the stages on its own and **halts**
   at each checkpoint. Its state is saved to disk, and it is restarted with
   `--resume`. It never talks to the user directly.
-- **The orchestrator** (a Claude Code skill shipped with the project):
-  launches the runner, reads each halt, makes the decisions that are its
-  own, puts the others to the user in the conversation, records the
-  answers, and resumes the run.
+- **The orchestrator** (a coding agent following instructions shipped
+  with the project): launches the runner, reads each halt, makes the
+  decisions that are its own, puts the others to the user in the
+  conversation, records the answers, and resumes the run.
+
+### Agent and model independence
+
+Nothing in the design depends on a particular agent or model vendor:
+
+- **The runner's model calls** go through one backend interface: a
+  prompt and a JSON schema in, schema-valid JSON plus usage (cost, time)
+  out. `claude -p` is one backend. Any other must pass the same interface
+  and the acceptance suite (§10) before it is supported.
+- **The orchestrator's instructions** are one plain markdown file in the
+  repo. Each agent gets a thin pointer to that file: a Claude Code skill,
+  an `AGENTS.md` entry for Codex and similar agents. The pointers hold no
+  instructions of their own, so the agents cannot drift apart.
+- **Agent features are optional.** Where the agent supports structured
+  questions (e.g. multiple choice), the orchestrator uses them. Otherwise
+  it asks in plain text. The review file and `decisions.json` are the
+  same either way.
+- **Checks that need isolation are run by the runner**, as separate
+  backend calls, never by the agent's own sub-agents. Code then enforces
+  what each call can see, whatever agent drives the run.
 
 ### Who decides
 
@@ -118,8 +138,8 @@ one entry per pending item, containing:
 This is a required fidelity check at stages 2 and 3, for every definition
 and every claim statement. It runs before the review file is written.
 
-1. **Translate, at two depths.** A sub-agent with a fresh context reads
-   the Lean. It is given the item's Lean code, the parts of `Defs.lean`
+1. **Translate, at two depths.** A separate backend call made by the
+   runner (not by the orchestrator) reads the Lean. It is given the item's Lean code, the parts of `Defs.lean`
    that the item uses, and a short glossary of identifiers (`sneezed`,
    `linguist`, …). It writes plain English in the register of a semantics
    paper, saying exactly what the Lean says: quantifier scope,
@@ -137,15 +157,16 @@ and every claim statement. It runs before the review file is written.
    surface, even when the definitions underneath are wrong. Where
    possible the runner unfolds the statement mechanically in Lean
    (`unfold` / `simp only` on the paper's definitions) and passes the
-   result to the sub-agent. Otherwise the sub-agent unfolds it from the
+   result to the translator. Otherwise the translator unfolds it from the
    definitions it was given. For a definition, the two readings may
    coincide.
-2. **Isolation.** The sub-agent never sees the paper, `claims.json`, the
+2. **Isolation.** The translator never sees the paper, `claims.json`, the
    informal `statement`, the formalizer's notes or comments, or the
    conversation. Comments are stripped from the Lean it receives. Only
    this isolation makes it a check: a translator who knows the intended
-   claim tends to read it into the Lean.
-3. **Compare.** A second step reads both readings next to the paper's
+   claim tends to read it into the Lean. The runner builds the
+   translator's prompt itself, so the isolation is enforced by code.
+3. **Compare.** A second backend call reads both readings next to the paper's
    LaTeX (and, for the unfolded reading, the paper's own definitions).
    It lists every difference, each as one line, and classes it as:
    - **substantive**: the truth conditions differ, i.e. there is a model,
@@ -170,7 +191,8 @@ The back-translation is evidence for the user, not a verdict. A clean
 comparison does not replace the user's approval at checkpoint 3.
 
 The orchestrator takes the user through the file in the conversation,
-using multiple-choice questions where an item has a fixed set of readings.
+using multiple-choice questions where an item has a fixed set of readings
+and the agent supports them.
 The user may also edit the file directly. Either way, decisions go into
 `runs/<paper>/decisions.json`, which is the only record the runner reads.
 
@@ -265,10 +287,16 @@ predictions.
 
 ## 8. Installation and runtime
 
-- Installed by the user as a command-line runner plus a Claude Code skill
-  (the orchestrator, §4). The runner works without the skill (`--auto`, or
-  editing review files by hand), so it can be tested on its own.
-- Requires: a Lean toolchain (pinned version), and access to Claude.
+- Installed by the user as a command-line runner plus the orchestrator
+  instructions and their per-agent pointers (§4). The runner works without
+  an agent (`--auto`, or editing review files by hand), so it can be tested
+  on its own.
+- Requires: a Lean toolchain (pinned version), and access to a supported
+  model backend (§4).
+- **Supported** means the acceptance suite (§10) has passed with that
+  backend and agent. So far the only backend is `claude -p` and the only
+  target agent is Claude Code; the README says the project is tested only
+  with Claude.
 - The Lean side is a Lake project per run. Defs are compiled once and
   imported, not pasted into each file.
 - Mathlib or linglib may be used as a dependency, with the version pinned.
