@@ -39,6 +39,7 @@ Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
         Tested offline with a fake model on toy-v1 outputs; not yet rerun live
 
 * DONE Step 2b: formalize claims
+  /Superseded 2026-11-05 by the state/prove split (see Checkpoints)./
   For each =claim=: one Lean file building on =Defs.lean=, with a theorem
   stating the claim faithfully, plus a proof attempt.
   =python3 formalize.py claims examples/toy/paper.tex [claim-id]=
@@ -73,10 +74,9 @@ Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
         sorry + wrong name, then honest): all cheats rejected, honest passes.
         With text scan off, =#print axioms= alone still catches the axiom
   - [X] Re-ran toy claims under audit: 6/6 pass, same verdicts, zero axioms used
-  - [ ] Statement changing between attempts: /not/ enforced mechanically.
-        Superseded by SPEC.md §4: statements are approved at checkpoint 3 and
-        frozen; audit must then check the proved statement /equals/ the
-        approved one (see Checkpoints)
+  - [X] Statement changing between attempts: now impossible by construction —
+        the prover never writes the theorem header (see state/prove split
+        under Checkpoints)
 
 * NEXT Toy paper v2: sentences, LFs, derivations
   =examples/toy/paper.tex= rewritten Heim & Kratzer style: lexicon as typed
@@ -101,7 +101,7 @@ Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
         parts (vocabulary, lexicon, LFs, stated TCs), vs. model writes it all
   - [ ] Extract: add an =example= kind (numbered sentence + LF) so Defs can
         define each sentence's LF once, shared by all claims
-  - [ ] Re-run defs + claims on v2
+  - [ ] Re-run defs + state + prove on v2
 
 * TODO Checkpoints (SPEC.md §4)
   Settled 2026-11-05: runner halts → =review/<stage>.md= → orchestrator skill
@@ -117,9 +117,24 @@ Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
         classes differences substantive / wording; only substantive flags
         (even under =--auto=). Test on planted unfaithful claim /and/
         definition variants, plus zero false flags on the faithful run (SPEC.md §10)
-  - [ ] Split claims into state (checkpoint 3) and prove; freeze statements:
-        audit rejects a proof whose =#check= statement differs from the
-        approved one; prover may only halt back to checkpoint 3 (SPEC.md §5)
+  - [X] Split claims into =state= (checkpoint 3) and =prove=; statements frozen
+        - =prompts/state.md=: model returns only a closed =Prop= term, not asked
+          whether it's true; checked as =example : Prop := …=; no commands or
+          declarations allowed in it → =statements.json=
+        - =prompts/prove.md=: model returns =helpers= + =proof= only; the
+          runner writes the header (=theorem <id> : S := …= or
+          =<id>_false : ¬ (S) := …=) from =statements.json=, so the statement
+          can't drift. Helpers may not =open=, =attribute=, =local notation=, …
+          (anything that could change how the header elaborates)
+        - Prover verdict =challenge= (statement ≠ claim) → outcome =challenged=,
+          nothing compiled; goes back to checkpoint 3
+        - Tested offline with a fake model on toy-v1 (smuggled theorem, free
+          variable, local notation, challenge, proved, disproved, missing
+          statement). Not yet run live
+  - [ ] Approval is manual for now (read/edit =statements.json=, then run
+        =prove=); move to =review/state.md= + =decisions.json= with the rest
+        of the checkpoint machinery. =prove= should also refuse statements
+        whose claim or =Defs.lean= changed since they were written
   - [ ] Example models in review files (stages 2–3), from the executable
         fragment — needs Oracle below
   - [ ] =--auto= mode, output marked unreviewed
@@ -158,7 +173,8 @@ Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
 
 * TODO Outcomes (SPEC.md §5)
   - [ ] Rename outcomes to =proved= / =refuted= / =open= / =blocked=
-        (currently =proved= / =disproved= / =failed=); =open= carries the
+        (currently =proved= / =disproved= / =open= / =challenged=; =failed=
+        became =open= with the state/prove split); =open= carries the
         oracle's bounded-check result; =blocked= propagates along =depends_on=
   - [ ] Trace each refutation to its source (definition, step, or earlier
         false claim, e.g. (3) ⊨ (6) ← Prop 4)

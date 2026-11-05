@@ -4,8 +4,13 @@
 Usage:
     python3 formalize.py extract examples/toy/paper.tex   # -> claims.json
     python3 formalize.py defs    examples/toy/paper.tex   # -> Defs.lean
-    python3 formalize.py claims  examples/toy/paper.tex [claim-id]
+    python3 formalize.py state   examples/toy/paper.tex [claim-id]
+                                                  # -> statements.json
+    python3 formalize.py prove   examples/toy/paper.tex [claim-id]
                                                   # -> claims/<id>.lean, results.json
+
+Review statements.json (edit or delete entries) before running `prove`:
+the prover proves or refutes each statement exactly as written there.
 
 Every step writes its output under runs/<paper-name>/ so you can inspect it.
 """
@@ -111,9 +116,15 @@ ESCAPE_HATCHES = [r"\bsorry\b", r"\badmit\b", r"\baxiom\b", r"\bnative_decide\b"
                   r"\bunsafe\b", r"\bimplemented_by\b", r"\bextern\b"]
 # Claims must be stated in the vocabulary of Defs.lean, not new definitions
 # (which could quietly shadow or replace the paper's).
-NEW_DEFINITIONS = [r"(?m)^\s*(?:@\[[^\]]*\]\s*)?(?:(?:private|protected|noncomputable)\s+)*"
+NEW_DEFINITIONS = [r"(?m)^\s*(?:@\[[^\]]*\]\s*)?(?:(?:private|protected|noncomputable|local|scoped)\s+)*"
                    r"(?:def|abbrev|structure|inductive|class|instance|opaque"
                    r"|notation|infix\w*|prefix|postfix|macro|syntax)\b"]
+# The prover's code sits between a fixed statement's context and its theorem
+# header, so it may not change how names or notation in that header resolve.
+SCOPE_CHANGES = [r"(?m)^\s*(?:open|export|attribute|set_option|local|scoped"
+                 r"|variable|universe|section|namespace|end)\b"]
+# A statement is a single term: no commands or declarations around it.
+COMMANDS = SCOPE_CHANGES + [r"(?m)^\s*(?:theorem|lemma|example|#\w+)\b"]
 
 
 def strip_comments(code: str) -> str:
@@ -148,49 +159,57 @@ def audit(code: str, log: str, forbidden: list[str],
 
 def write_lean(task: str, out_path: Path, schema: dict = LEAN_SCHEMA,
                prefix: str = "", forbidden: list[str] = ESCAPE_HATCHES,
-               theorem_name=None, check=None) -> dict | None:
+               theorem_name=None, check=None, assemble=None, own=None,
+               stop=None) -> dict | None:
     """Ask for Lean code, compile + audit it, feed problems back; up to MAX_ATTEMPTS.
 
-    The file compiled is `prefix + answer["lean"]` (prefix = pasted-in
-    definitions), plus `#print axioms` / `#check` for the main theorem if
-    `theorem_name(answer)` gives one; `check(answer)`, if given, returns
-    further audit problems. Every attempt is kept as <name>.attemptN.lean /
-    .log next to out_path. Returns the model's final
-    answer (plus audit facts) if it passed, else None.
+    The code is `answer["lean"]`, or `assemble(answer)` if given (the runner
+    builds it from the answer's fields; `own(answer)` is then the part the
+    model wrote, which is what `forbidden` is scanned for). The file compiled is `prefix + code`
+    (prefix = pasted-in definitions), plus `#print axioms` / `#check` for the
+    main theorem if `theorem_name(answer)` gives one; `check(answer)`, if
+    given, returns further audit problems. If `stop(answer)`, the answer is
+    returned as is, uncompiled. Every attempt is kept as <name>.attemptN.lean /
+    .log next to out_path. Returns the model's final answer (plus audit facts)
+    if it passed, else None.
     """
     prompt = task
     offset = prefix.count("\n")
     for n in range(1, MAX_ATTEMPTS + 1):
         print(f"  attempt {n}:", end="")
         answer = call_claude(prompt, schema)
+        if stop and stop(answer):
+            print("  stopped")
+            return answer | {"attempts": n}
+        code = assemble(answer) if assemble else answer["lean"]
         theorem = theorem_name(answer) if theorem_name else None
         suffix = f"\n\n#print axioms {theorem}\n#check @{theorem}\n" if theorem else ""
         attempt = out_path.with_suffix(f".attempt{n}.lean")
-        attempt.write_text(prefix + answer["lean"] + suffix)
+        attempt.write_text(prefix + code + suffix)
         ok, log = compile_lean(attempt)
         log = shift_line_numbers(log, attempt.name, offset)
-        problems, facts = audit(answer["lean"], log, forbidden, theorem)
+        problems, facts = audit(own(answer) if own else code, log, forbidden, theorem)
         if check:
             problems += check(answer)
         if problems:
             log += "\n--- AUDIT ---\n" + "\n".join(f"audit: {p}" for p in problems) + "\n"
         attempt.with_suffix(".log").write_text(log)
         if ok and not problems:
-            out_path.write_text(prefix + answer["lean"] + suffix)
+            out_path.write_text(prefix + code + suffix)
             print(f"  passed -> {out_path.name}")
             return answer | facts | {"attempts": n}
         first = (problems or log.strip().splitlines() or ["(no output)"])[0]
         print(f"  failed: {first}")
         prompt = (task
-                  + "\n\n--- YOUR PREVIOUS ATTEMPT ---\n" + answer["lean"]
-                  + "\n\n--- LEAN OUTPUT AND AUDIT (line numbers count from your code) ---\n"
+                  + "\n\n--- YOUR PREVIOUS ATTEMPT (as compiled, after DEFINITIONS) ---\n" + code
+                  + "\n\n--- LEAN OUTPUT AND AUDIT (line numbers count from the code above) ---\n"
                   + log
                   + "\n\nFix every problem above and return your complete corrected code.")
     print(f"  gave up after {MAX_ATTEMPTS} attempts")
     return None
 
 
-# --- Step 2a: shared definitions ---------------------------------------------
+# --- Step 2: shared definitions ----------------------------------------------
 
 DEFS_SCHEMA = {
     "type": "object",
@@ -235,55 +254,129 @@ def defs(paper: Path, run_dir: Path) -> None:
         print("  notes:\n    " + answer["notes"].replace("\n", "\n    "))
 
 
-# --- Step 2b: claims ---------------------------------------------------------
+# --- Step 3: state claims ---------------------------------------------------
 
-CLAIM_SCHEMA = {
+STATE_SCHEMA = {
     "type": "object",
-    "properties": {
-        "verdict": {"enum": ["proved", "disproved"]},
-        "lean": {"type": "string"},
-        "notes": {"type": "string"},
-    },
-    "required": ["verdict", "lean", "notes"],
+    "properties": {"statement": {"type": "string"}, "notes": {"type": "string"}},
+    "required": ["statement", "notes"],
 }
 
 
-def claims(run_dir: Path, only: str | None = None) -> None:
+def claim_items(run_dir: Path, only: str | None) -> list[dict]:
     items = json.loads((run_dir / "claims.json").read_text())["items"]
+    return [i for i in items if i["kind"] == "claim" and (not only or i["id"] == only)]
+
+
+def load_defs(run_dir: Path) -> tuple[str, str]:
+    """Defs.lean (to paste in as a prefix) and its namespace."""
     # TODO: pasting Defs.lean into every claim file is the barebones option;
     # see TODO.org for doing this properly (olean + LEAN_PATH, or Lake).
     defs_lean = (run_dir / "Defs.lean").read_text().rstrip("\n") + "\n\n"
-    ns = paper_namespace(defs_lean)
+    return defs_lean, paper_namespace(defs_lean)
+
+
+def fill(template: str, **fields: str) -> str:
+    """Fill {field} placeholders; the bulky ones (defs, claim) go in last."""
+    for key in sorted(fields, key=lambda k: k in ("defs", "claim", "statement")):
+        template = template.replace("{" + key + "}", fields[key])
+    return template
+
+
+def state(run_dir: Path, only: str | None = None) -> None:
+    defs_lean, ns = load_defs(run_dir)
+    out_dir = run_dir / "statements"
+    out_dir.mkdir(exist_ok=True)
+    path = run_dir / "statements.json"
+    statements = json.loads(path.read_text()) if path.exists() else {}
+
+    for item in claim_items(run_dir, only):
+        cid = item["id"]
+        print(f"state {cid} ({item['label']}) -> statements.json")
+        task = fill((PROMPTS / "state.md").read_text(), namespace=ns, defs=defs_lean,
+                    claim=json.dumps(item, indent=2, ensure_ascii=False))
+        answer = write_lean(
+            task, out_dir / f"{cid}.lean", STATE_SCHEMA, defs_lean,
+            forbidden=ESCAPE_HATCHES + NEW_DEFINITIONS + COMMANDS,
+            assemble=lambda a: (f"namespace {ns}\n\nexample : Prop :=\n"
+                                f"  {a['statement'].strip()}\n\nend {ns}\n"),
+            own=lambda a: a["statement"])
+        if answer:
+            statements[cid] = {"statement": answer["statement"].strip(),
+                               "attempts": answer["attempts"], "notes": answer["notes"]}
+            print(f"  => {statements[cid]['statement']}")
+        else:
+            statements.pop(cid, None)
+            print("  => FAILED (no statement)")
+        path.write_text(json.dumps(statements, indent=2, ensure_ascii=False) + "\n")
+    print(f"\nreview {path} before running `prove`")
+
+
+# --- Step 4: prove / refute ---------------------------------------------------
+
+PROVE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "verdict": {"enum": ["proved", "disproved", "challenge"]},
+        "helpers": {"type": "string"},
+        "proof": {"type": "string"},
+        "notes": {"type": "string"},
+    },
+    "required": ["verdict", "helpers", "proof", "notes"],
+}
+
+
+def prove(run_dir: Path, only: str | None = None) -> None:
+    defs_lean, ns = load_defs(run_dir)
+    statements = json.loads((run_dir / "statements.json").read_text())
     out_dir = run_dir / "claims"
     out_dir.mkdir(exist_ok=True)
     results_path = run_dir / "results.json"
     results = json.loads(results_path.read_text()) if results_path.exists() else {}
 
-    for item in items:
-        if item["kind"] != "claim" or (only and item["id"] != only):
-            continue
-        print(f"claim {item['id']} ({item['label']}) -> claims/{item['id']}.lean")
-        task = ((PROMPTS / "claim.md").read_text()
-                .replace("{id}", item["id"])
-                .replace("{namespace}", ns)
-                .replace("{defs}", defs_lean)
-                .replace("{claim}", json.dumps(item, indent=2, ensure_ascii=False)))
+    for item in claim_items(run_dir, only):
         cid = item["id"]
+        if cid not in statements:
+            print(f"prove {cid}: skipped, no statement in statements.json (run `state`)")
+            continue
+        stmt = statements[cid]["statement"]
+        print(f"prove {cid} ({item['label']}) -> claims/{cid}.lean")
+        task = fill((PROMPTS / "prove.md").read_text(), id=cid, namespace=ns,
+                    defs=defs_lean, statement=stmt,
+                    claim=json.dumps(item, indent=2, ensure_ascii=False))
+
+        # The theorem header is ours, built from the frozen statement; the
+        # model only supplies helpers and the proof term.
+        def assemble(a: dict) -> str:
+            header = (f"theorem {cid} :\n    {stmt} :=" if a["verdict"] == "proved"
+                      else f"theorem {cid}_false :\n    ¬ ({stmt}) :=")
+            helpers = a["helpers"].strip()
+            return (f"namespace {ns}\n\n" + (helpers + "\n\n" if helpers else "")
+                    + f"{header} {a['proof'].strip()}\n\nend {ns}\n")
+
         answer = write_lean(
-            task, out_dir / f"{cid}.lean", CLAIM_SCHEMA, defs_lean,
-            forbidden=ESCAPE_HATCHES + NEW_DEFINITIONS,
+            task, out_dir / f"{cid}.lean", PROVE_SCHEMA, defs_lean,
+            forbidden=ESCAPE_HATCHES + NEW_DEFINITIONS + SCOPE_CHANGES,
+            assemble=assemble, own=lambda a: a["helpers"] + "\n" + a["proof"],
+            stop=lambda a: a["verdict"] == "challenge",
             theorem_name=lambda a: f"{ns}.{cid}" if a["verdict"] == "proved"
                                    else f"{ns}.{cid}_false")
-        if answer:
+        if answer and answer["verdict"] == "challenge":
+            results[cid] = {"outcome": "challenged", "attempts": answer["attempts"],
+                            "statement": stmt, "notes": answer["notes"]}
+            print(f"  => CHALLENGED: {answer['notes']}")
+        elif answer:
             results[cid] = {"outcome": answer["verdict"],
                             "attempts": answer["attempts"],
+                            "statement": stmt,
                             "lean_statement": answer["lean_statement"],
                             "axioms": answer["axioms"],
                             "notes": answer["notes"]}
             print(f"  => {answer['verdict'].upper()}")
         else:
-            results[item["id"]] = {"outcome": "failed", "attempts": MAX_ATTEMPTS, "notes": ""}
-            print("  => FAILED")
+            results[cid] = {"outcome": "open", "attempts": MAX_ATTEMPTS,
+                            "statement": stmt, "notes": ""}
+            print("  => OPEN")
         results_path.write_text(json.dumps(results, indent=2, ensure_ascii=False) + "\n")
 
     print("\nsummary:")
@@ -294,7 +387,7 @@ def claims(run_dir: Path, only: str | None = None) -> None:
 # --- CLI ---------------------------------------------------------------------
 
 def main() -> None:
-    if len(sys.argv) not in (3, 4) or sys.argv[1] not in {"extract", "defs", "claims"}:
+    if len(sys.argv) not in (3, 4) or sys.argv[1] not in {"extract", "defs", "state", "prove"}:
         sys.exit(__doc__)
     step, paper = sys.argv[1], Path(sys.argv[2])
     run_dir = RUNS / paper.parent.name
@@ -303,8 +396,10 @@ def main() -> None:
         extract(paper, run_dir)
     elif step == "defs":
         defs(paper, run_dir)
-    elif step == "claims":
-        claims(run_dir, sys.argv[3] if len(sys.argv) == 4 else None)
+    elif step == "state":
+        state(run_dir, sys.argv[3] if len(sys.argv) == 4 else None)
+    elif step == "prove":
+        prove(run_dir, sys.argv[3] if len(sys.argv) == 4 else None)
 
 
 if __name__ == "__main__":

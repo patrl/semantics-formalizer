@@ -57,6 +57,7 @@ Everything goes in one run directory per paper (currently `runs/<paper>/`).
 | `source/` | The preprocessed paper (flattened, macros expanded, or converted from PDF) plus the original (§2) |
 | `claims.json` | Extracted items: id, kind (`definition` / `claim` / `example`), label, source location, verbatim LaTeX, faithful informal statement, dependencies, concerns, **user-approval status** |
 | `Defs.lean` | The theory: types, lexicon, composition rules, model class, definitions, numbered examples and their LFs |
+| `statements.json` | Per claim: its Lean statement (a closed `Prop`, from stage 3) and notes. Frozen once approved: stage 4 proves or refutes exactly this |
 | `claims/<id>.lean` | One file per claim: a theorem `<id>` (proved) or `<id>_false : ¬ …` (refuted, with a counterexample) |
 | `Oracle.lean` (+ CLI wrapper) | The executable oracle (§6) |
 | `results.json` | Per claim: outcome, Lean's own rendering of the statement, axioms used, attempts, cost |
