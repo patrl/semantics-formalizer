@@ -421,6 +421,13 @@ Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
           about all derivations (A-over-A blocks every PL LF, ~10), other
           theories (Fox & Sudo, Charlow on indefinites, ~12). Start with one
           section (e.g. denotations in §2–3.2)
+    - [X] State + backtranslate on the 16 derived-denotation claims of
+          §2–3.2 (c13 … c43): 16/16 stated on attempt 1 ($3.17), all through
+          =denotAt= on the example LFs; back-translation 0 flagged, 2 choices
+          (c22, c23: what a failed ι contributes to a set — =none= member — the
+          paper doesn't say) ($8.10: ~$0.50/claim, whole paper + 757-line
+          Defs per call — over the $5 estimated)
+    - [ ] Author review of the 16 statements, then =prove=
   - [ ] Extract: tag each claim's kind (data / derivation / typing /
         metatheoretic / other theory); =state= skips data claims or states
         them as predictions. Found on the real paper
