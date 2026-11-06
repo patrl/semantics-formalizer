@@ -10,9 +10,9 @@ theorem it proves is assembled for you. First decide whether STATEMENT is
 true.
 
 - If it is true: set `verdict` to `"proved"`. Your proof is checked as
-  `theorem {id} : STATEMENT := <proof>`.
+  `theorem T : STATEMENT := <proof>`.
 - If it is false: set `verdict` to `"disproved"`. Your proof is checked as
-  `theorem {id}_false : ¬ (STATEMENT) := <proof>`, typically by exhibiting a
+  `theorem T_false : ¬ (STATEMENT) := <proof>`, typically by exhibiting a
   counterexample.
 - If you believe STATEMENT does not say what CLAIM says (a missing or extra
   hypothesis, a different quantifier or scope, …): set `verdict` to

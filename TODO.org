@@ -369,7 +369,8 @@ Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
   - [X] =claims.json=: add source location (done: =locate()=, see Step 1)
   - [ ] =log/=: every model call, Lean attempt and decision — as JSON Lines
         (append-only, survives a crash mid-run)
-  - [ ] Cost and time recorded per stage (currently only printed)
+  - [ ] Cost and time recorded per stage (printed per call, with cached/new/out
+        tokens, and as a total per run; not yet logged)
   - [ ] *Do the build properly* — required by SPEC.md §8: make =runs/<paper>/=
         a Lake project so claim files =import Defs= instead of pasting it.
         Needed before real papers (big Defs, Mathlib)
@@ -436,8 +437,24 @@ Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
         paper); warn only on unknown ids
   - [X] Section titles with macros (=\ac{sp} readings=) were cut at the first
         =}=; =locate()= now matches braces (fixed 2026-11-06)
-  - [ ] Cost at scale: comparer sends the whole paper per claim (84k chars);
-        consider sending the relevant section(s) plus definitions
+  - [X] Cost at scale (done 2026-11-06): =claude -p= wrote every prompt to the
+        1h cache (2x input price) and never read it back, since the cache
+        breakpoint is the end of the user message. Now the part shared by
+        all claims of a step (instructions + Defs, or + the paper) goes in
+        the system prompt, cached 5 min (=FORCE_PROMPT_CACHING_5M=) and read
+        back at 0.1x by the next claim; one-off calls (extract, defs) run with
+        caching off. Real paper, 3 claims: $0.57 vs ~$1.50; comparer
+        $0.04/claim after the first (was ~$0.30). Acceptance rerun: 6/6
+        variants flagged, live probe passes. Prompt splits at a section
+        marker (=shared_until=); compare.md now has PAPER before CLAIM;
+        prove.md no longer names the claim id
+  - [ ] Further savings, if needed: output tokens now dominate (translator
+        2-6k out/claim); try a lower =--effort= or a smaller model for the
+        translator, rerunning the acceptance suite; =defs= retries could
+        cache the task too; send only relevant sections to the comparer
+  - [ ] Isolation probe: the CLI attaches the account email to every call
+        (seen 2026-11-06); harmless (same provider, can't bias a reading)
+        but the probe doesn't check for it
 
 * TODO Later / maybe
   - [ ] *Build on linglib* (deferred 2026-11-05; next step would be
@@ -454,5 +471,4 @@ Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
         - user's clone is on branch =human-review-status= with local edits: pin a commit
   - [ ] Suggested repairs as separate proposals the user can accept (SPEC.md §9)
   - [ ] Web review page (SPEC.md §12), only if conversation review is too painful
-  - [ ] Trim cost with =--system-prompt= (Claude Code's default prompt is ~14k tokens/call)
   - [ ] Mathlib, if real papers need it (sets, lattices, cardinality)

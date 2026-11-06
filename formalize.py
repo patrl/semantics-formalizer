@@ -18,6 +18,7 @@ or --out DIR. See README.md.
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -28,22 +29,40 @@ ROOT = Path(__file__).parent
 PROMPTS = ROOT / "prompts"
 RUNS = ROOT / "runs"
 
-SYSTEM_PROMPT = "You are a careful assistant. Follow the user's instructions exactly."
+SYSTEM_PROMPT = "You are a careful assistant. Follow the instructions exactly."
+
+SPENT = []   # the cost of each model call in this run, in USD
 
 
-def call_claude(prompt: str, schema: dict) -> dict:
+def call_claude(prompt: str, schema: dict, shared_until: str | None = None) -> dict:
     """Send one prompt to `claude -p` (no tools) and return its JSON answer.
 
     Each call starts from a fresh, isolated context: run from an empty temp
     directory (no CLAUDE.md, auto-memory, git status, or repo path) with a
     minimal system prompt, no settings, MCP servers, or skills. The prompt is
     all the model knows.
+
+    Caching. Claude Code caches a prompt up to the end of the user message,
+    which differs from call to call, so a cached prompt is never read back
+    and its cache write costs more than no caching at all. With
+    `shared_until`, the prompt is split before that marker: the part before
+    it (instructions, definitions, the paper), the same for every claim in a
+    step, goes in the system prompt, which is cached for 5 minutes and read
+    back at a tenth of the price by the next claim; the rest is the user
+    message. Without it, caching is off.
     """
+    system, user = SYSTEM_PROMPT, prompt
+    if shared_until and shared_until in prompt:
+        i = prompt.index(shared_until)
+        system, user = SYSTEM_PROMPT + "\n\n" + prompt[:i].rstrip(), prompt[i:]
+        env = os.environ | {"FORCE_PROMPT_CACHING_5M": "1"}
+    else:
+        env = os.environ | {"DISABLE_PROMPT_CACHING": "1"}
     cmd = [
         "claude", "-p",
         "--tools", "",                  # pure text-in/text-out, no file access
         "--no-session-persistence",
-        "--system-prompt", SYSTEM_PROMPT,
+        "--system-prompt", system,
         "--setting-sources", "",
         "--strict-mcp-config",
         "--disable-slash-commands",
@@ -51,12 +70,17 @@ def call_claude(prompt: str, schema: dict) -> dict:
         "--json-schema", json.dumps(schema),
     ]
     with tempfile.TemporaryDirectory() as cwd:
-        out = subprocess.run(cmd, input=prompt, capture_output=True, text=True,
-                             check=True, cwd=cwd)
+        out = subprocess.run(cmd, input=user, capture_output=True, text=True,
+                             check=True, cwd=cwd, env=env)
     reply = json.loads(out.stdout)
     if reply.get("is_error"):
         sys.exit(f"claude returned an error: {reply.get('result')}")
-    print(f"  (cost ${reply['total_cost_usd']:.3f}, {reply['duration_ms'] / 1000:.0f}s)")
+    SPENT.append(reply["total_cost_usd"])
+    u = reply["usage"]
+    print(f"  (cost ${reply['total_cost_usd']:.3f}, {reply['duration_ms'] / 1000:.0f}s;"
+          f" tokens: {u['cache_read_input_tokens']} cached,"
+          f" {u['cache_creation_input_tokens'] + u['input_tokens']} new,"
+          f" {u['output_tokens']} out)")
     return reply["structured_output"]
 
 
@@ -301,7 +325,7 @@ def audit(code: str, log: str, forbidden: list[str],
 def write_lean(task: str, out_path: Path, schema: dict = LEAN_SCHEMA,
                prefix: str = "", forbidden: list[str] = ESCAPE_HATCHES,
                theorem_name=None, check=None, assemble=None, own=None,
-               stop=None) -> dict | None:
+               stop=None, shared_until=None) -> dict | None:
     """Ask for Lean code, compile + audit it, feed problems back; up to MAX_ATTEMPTS.
 
     The code is `answer["lean"]`, or `assemble(answer)` if given (the runner
@@ -310,7 +334,8 @@ def write_lean(task: str, out_path: Path, schema: dict = LEAN_SCHEMA,
     (prefix = pasted-in definitions), plus `#print axioms` / `#check` for the
     main theorem if `theorem_name(answer)` gives one; `check(answer)`, if
     given, returns further audit problems. If `stop(answer)`, the answer is
-    returned as is, uncompiled. Every attempt is kept as <name>.attemptN.lean /
+    returned as is, uncompiled. `shared_until` is passed to `call_claude`
+    (the task up to it is cached across claims and attempts). Every attempt is kept as <name>.attemptN.lean /
     .log next to out_path. Returns the model's final answer (plus audit facts)
     if it passed, else None.
     """
@@ -318,7 +343,7 @@ def write_lean(task: str, out_path: Path, schema: dict = LEAN_SCHEMA,
     offset = prefix.count("\n")
     for n in range(1, MAX_ATTEMPTS + 1):
         print(f"  attempt {n}:", end="")
-        answer = call_claude(prompt, schema)
+        answer = call_claude(prompt, schema, shared_until)
         if stop and stop(answer):
             print("  stopped")
             return answer | {"attempts": n}
@@ -459,7 +484,7 @@ def state(run_dir: Path, only: str | None = None) -> None:
             forbidden=ESCAPE_HATCHES + NEW_DEFINITIONS + COMMANDS,
             assemble=lambda a: (f"namespace {ns}\n\nexample : Prop :=\n"
                                 f"  {a['statement'].strip()}\n\nend {ns}\n"),
-            own=lambda a: a["statement"])
+            own=lambda a: a["statement"], shared_until="--- CLAIM ---")
         if answer:
             statements[cid] = {"statement": answer["statement"].strip(),
                                "attempts": answer["attempts"], "notes": answer["notes"]}
@@ -548,12 +573,12 @@ def backtranslate(paper: Path, run_dir: Path, only: str | None = None) -> None:
         print(f"back-translate {cid} ({item['label']})")
         prompt = translator_prompt(defs_lean, statement)
         (out_dir / f"{cid}.prompt.md").write_text(prompt)   # kept for auditing isolation
-        reading = call_claude(prompt, BACK_SCHEMA)
+        reading = call_claude(prompt, BACK_SCHEMA, "--- STATEMENT ---")
         print(f"compare {cid}")
         diffs = call_claude(fill((PROMPTS / "compare.md").read_text(),
                                  claim=item["latex"], paper=tex,
                                  surface=reading["surface"], unfolded=reading["unfolded"]),
-                            COMPARE_SCHEMA)["differences"]
+                            COMPARE_SCHEMA, "--- CLAIM ---")["differences"]
         flagged = any(d["class"] == "substantive" for d in diffs)
         results[cid] = {"statement": statement, **reading, "differences": diffs,
                         "flagged": flagged}
@@ -599,7 +624,7 @@ def prove(run_dir: Path, only: str | None = None) -> None:
             continue
         stmt = statements[cid]["statement"]
         print(f"prove {cid} ({item['label']}) -> claims/{cid}.lean")
-        task = fill((PROMPTS / "prove.md").read_text(), id=cid, namespace=ns,
+        task = fill((PROMPTS / "prove.md").read_text(), namespace=ns,
                     defs=defs_lean, statement=stmt,
                     claim=json.dumps(item, indent=2, ensure_ascii=False))
 
@@ -616,7 +641,7 @@ def prove(run_dir: Path, only: str | None = None) -> None:
             task, out_dir / f"{cid}.lean", PROVE_SCHEMA, defs_lean,
             forbidden=ESCAPE_HATCHES + NEW_DEFINITIONS + SCOPE_CHANGES,
             assemble=assemble, own=lambda a: a["helpers"] + "\n" + a["proof"],
-            stop=lambda a: a["verdict"] == "challenge",
+            stop=lambda a: a["verdict"] == "challenge", shared_until="--- CLAIM ---",
             theorem_name=lambda a: f"{ns}.{cid}" if a["verdict"] == "proved"
                                    else f"{ns}.{cid}_false")
         if answer and answer["verdict"] == "challenge":
@@ -695,6 +720,7 @@ def main() -> None:
         backtranslate(args.paper, run_dir, args.claim)
     elif args.step == "prove":
         prove(run_dir, args.claim)
+    print(f"\n{len(SPENT)} model call(s), ${sum(SPENT):.2f}")
 
 
 if __name__ == "__main__":

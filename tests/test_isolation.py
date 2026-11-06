@@ -82,7 +82,8 @@ def plant(run_dir: Path) -> Path:
 def offline() -> bool:
     prompts = []
 
-    def fake(prompt, schema):
+    def fake(prompt, schema, shared_until=None):
+        # system prompt and user message together: all the model sees
         prompts.append((schema, prompt))
         if schema is F.BACK_SCHEMA:
             return {"surface": "s", "unfolded": "u"}

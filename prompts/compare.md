@@ -44,11 +44,11 @@ derives or claims elsewhere (derived claims are what is being checked).
 If there is no difference, return an empty list. Don't list things that
 agree.
 
---- CLAIM ---
-{claim}
-
 --- PAPER ---
 {paper}
+
+--- CLAIM ---
+{claim}
 
 --- SURFACE ---
 {surface}

@@ -31,8 +31,10 @@ progress.
   no tools, settings, MCP servers or project memory, so the model sees only
   the prompt.
 
-Cost: a run on one of the toy papers costs about $3–5 in model usage
-(back-translation is about $0.10 per claim).
+Cost: a run on one of the toy papers costs a few dollars in model usage.
+Each step prints the cost of every call and the total; within a step, the
+part every claim shares (instructions, definitions, the paper) is cached, so
+the first claim costs most.
 
 ## Quickstart
 
