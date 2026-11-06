@@ -22,8 +22,8 @@ Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
      delete entries if needed.
   2. =python3 formalize.py prove examples/toy-fol/paper.tex=
   3. Score =runs/toy-fol/results.json= vs =examples/toy-fol/EXPECTED.md=:
-     expect prop1, prop2, prop5, disc1, disc2 proved; prop3, prop4, disc3,
-     disc4 refuted, each countermodel with a non-empty domain.
+     expect prop1, prop2, prop5, claim_disc1, claim_disc2 proved; prop3,
+     prop4, claim_disc3, claim_disc4 refuted, each countermodel with a non-empty domain.
   Then: re-run extract + defs on toy v2 (regression after =lf= → =analysis=)
   and state + prove on it.
 
