@@ -136,15 +136,16 @@ Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
         mismatch), =IsTrue=, =Entails=/=Contradictory= over postulate-respecting
         models, =ex1=–=ex6= as LF defs. No hand-written sentence TCs.
         Interpretive choices in =runs/toy/Defs.notes.md= (checkpoint 2)
-  - [-] State + prove on v2 (stop after =state= to review statements)
+  - [X] State + prove on v2 (stop after =state= to review statements)
     - [X] State (2026-11-06, $0.75, 14/14 first attempt): all faithful on
           review. tc1/tc2 also pin down the FA result (=interp M ex = some …=);
           pred3 read as truth preservation within each model where ann is a
           linguist (flagged: Def 4 has no "entails in a model"); tc4 states the
           paper's mis-derived TC as written
-    - [ ] Prove — waiting on the user's review of =runs/toy/statements.json=.
-          Expected: 10 proved; tc4, prop4, claim_some_phon, claim_every_some
-          disproved
+    - [X] Prove (2026-11-06, $1.07, statements approved as written, 14/14
+          first attempt): matches =EXPECTED.md= exactly — 10 proved; tc4,
+          prop4, claim_some_phon, claim_every_some disproved with the
+          expected countermodels. Axioms: at most =propext=
   - [X] Not every paper has LFs: many give intuitive translations into FOL or
         another representation language. Generalized: extract field =lf= →
         =analysis= (=LF: …= / =FOL: …=, one per reading); =defs.md= formalizes
