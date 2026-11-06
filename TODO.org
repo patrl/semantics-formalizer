@@ -11,6 +11,22 @@ plan consistent with it.
 Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
 =claude -p= with =--json-schema=.
 
+* Where we left off (2026-11-06)
+  Paused at checkpoint 3 of the =toy-fol= run (see "Run extract + defs +
+  state + prove on toy-fol" under Toy paper v2). Extract, defs and state are
+  done; outputs in =runs/toy-fol/= (git-ignored: =claims.json=, =Defs.lean=,
+  =statements.json=).
+  To resume:
+  1. Review =runs/toy-fol/statements.json= against =Defs.lean= (Claude's
+     review: all 9 faithful; Prop 4 covers both readings of (2)). Edit or
+     delete entries if needed.
+  2. =python3 formalize.py prove examples/toy-fol/paper.tex=
+  3. Score =runs/toy-fol/results.json= vs =examples/toy-fol/EXPECTED.md=:
+     expect prop1, prop2, prop5, disc1, disc2 proved; prop3, prop4, disc3,
+     disc4 refuted, each countermodel with a non-empty domain.
+  Then: re-run extract + defs on toy v2 (regression after =lf= → =analysis=)
+  and state + prove on it.
+
 * DONE Step 0: setup
   - [X] Toy paper =examples/toy/paper.tex= (determiners, conservativity, monotonicity)
   - [X] Answer key =examples/toy/EXPECTED.md= (Props 4 and 5 are planted falsehoods)
@@ -156,7 +172,19 @@ Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
         (inverse doesn't); (3) and surface(2) "contradictory"; no-student
         model "verifies both readings of (1)" (inverse needs a book).
         Added to SPEC.md §10
-  - [ ] Run extract + defs + state + prove on toy-fol; score vs =EXPECTED.md=
+  - [-] Run extract + defs + state + prove on toy-fol; score vs =EXPECTED.md=
+    - [X] Extract ($0.15): 6 examples (readings labelled surface/inverse),
+          9 claims, all 4 planted errors flagged with correct countermodels;
+          (5) flagged as indirect — and caught a real ambiguity in the paper's
+          wording of it (literal substitution adds S m); =EXPECTED.md= updated.
+          Also flagged that "equivalent" is never defined
+    - [X] Defs ($0.13, 1 attempt): deep embedding of the paper's FOL (syntax +
+          standard satisfaction), no invented LFs; =Nonempty D= kept; =ex1=,
+          =ex2= are lists of =_a=/=_b= readings; "equivalent" read as mutual
+          entailment (flagged)
+    - [X] State ($0.45, all first attempt): 9 statements, all faithful on
+          review (e.g. Prop 4 quantifies over both readings of (2))
+    - [ ] Prove — waiting on the user's review of =statements.json=
 
 * TODO Checkpoints (SPEC.md §4)
   Settled 2026-11-05: runner halts → =review/<stage>.md= → orchestrator skill

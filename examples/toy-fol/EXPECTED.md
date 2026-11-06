@@ -23,7 +23,7 @@ entailment from a set of formulas; contradictoriness). The FOL language
 | (2) A student read every book. | surface ∃x[Sx ∧ ∀y[By → Rxy]]; inverse ∀y[By → ∃x[Sx ∧ Rxy]] | two readings |
 | (3) Some student read no book. | ∃x[Sx ∧ ¬∃y[By ∧ Rxy]] | |
 | (4) No student read every book. | ¬∃x[Sx ∧ ∀y[By → Rxy]] | |
-| (5) Mary read every book. | ∀y[By → R m y] | given **only indirectly** ("like the surface reading of (2), with m in place of …"): should be written out and flagged |
+| (5) Mary read every book. | ∀y[By → R m y] | given **only indirectly** ("like the surface reading of (2), with m in place of …"): should be written out and flagged. The wording is genuinely ambiguous: substituting m for the bound subject literally gives S m ∧ ∀y[By → R m y]. Either reading is acceptable if flagged; no claim's truth value depends on it |
 | (6) Mary is a student. | S m | given in running text |
 
 ## Claims
