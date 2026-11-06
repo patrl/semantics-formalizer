@@ -28,9 +28,11 @@ PAPER = ROOT / "examples" / "toy" / "paper.tex"
 #        claims to check)
 VARIANTS = {
     # Claim statements.
+    # An added non-emptiness hypothesis. Not `Nonempty D`: every `Model D`
+    # has `ann : D`, so that would change nothing (the comparer said so).
     "nonempty-hypothesis": (
         {"claim_every_some": "∀ (D : Type) (M : Model D), MeaningPostulate M → "
-                             "Nonempty D → TrueIn M ex2 → TrueIn M ex3"},
+                             "(∃ x, M.linguist x) → TrueIn M ex2 → TrueIn M ex3"},
         [], ["claim_every_some"]),
     "prop4-every-for-some": (
         {"prop4": "∀ (D : Type), LeftDownMON (every : Det D)"},

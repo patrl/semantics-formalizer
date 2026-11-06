@@ -11,6 +11,14 @@ plan consistent with it.
 Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
 =claude -p= with =--json-schema=.
 
+* TODO Validate generated claim IDs before using them in paths or Lean declarations
+  Allowlist IDs as safe Lean/file identifiers and containment-check every generated
+  output path, so malformed IDs cannot escape a run directory.
+
+* TODO Require approved statements before proving claims
+  Persist per-claim review decisions in =decisions.json= and reject statements that
+  are unreviewed, stale, or substantively flagged by back-translation.
+
 * DONE Step 0: setup
   - [X] Toy paper =examples/toy/paper.tex= (determiners, conservativity, monotonicity)
   - [X] Answer key =examples/toy/EXPECTED.md= (Props 4 and 5 are planted falsehoods)
@@ -213,22 +221,30 @@ Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
   - [ ] Runner: halt/resume with state on disk; read =decisions.json=
   - [ ] Review files: LaTeX, =#check=, blind back-translation, example models,
         recommendation, =decision:= line
-  - [-] Blind back-translation, statements only (2026-11-06): =backtranslate=
-        stage, =prompts/backtranslate.md= + =compare.md=, classes substantive /
-        choice / wording (choice added to SPEC §4). Isolation: offline canary
-        test + live context probe pass (=tests/test_isolation.py [--live]=).
-        Round 1 (comparer given claims.json spans): 0/23 false flags, but
-        spurious choices — extraction had truncated Defs 1, 2, 6 to one line.
-        Fixed: extract expands spans to the whole theorem-like environment
-        (applied to existing runs/toy, runs/toy-fol claims.json); comparer now
-        gets the full paper. Variants (=tests/backtranslate_variants.py=): 4/6
-        flagged; missed nonempty-hypothesis and no-negation-scope (comparer
-        excused both as =choice=). =compare.md= tightened (choice only when the
-        paper's text supports both readings; paper's definitions govern) —
-        NOT yet rerun: usage limit hit mid-run.
-        Next: rerun variants (all 6 must flag) + both faithful runs (0 flags);
-        round-1 results in =runs/*/backtranslations.round1.json=. Then
-        definitions (checkpoint 2), mechanical unfolding
+  - [X] Blind back-translation, statements only (2026-11-06): =backtranslate=
+        stage → =backtranslations.json=; =prompts/backtranslate.md= (sees only
+        stripped Defs.lean, namespace renamed =Paper=, bare statement) +
+        =compare.md= (claim + whole paper); classes substantive / choice /
+        wording (choice added to SPEC §4). Comment stripper now handles nested
+        block comments and string literals (also used by the audit).
+        - Isolation: offline canary test (11 canaries; verified it fails on a
+          deliberate leak) + live context probe — both pass
+          (=tests/test_isolation.py [--live]=)
+        - Round 1 (comparer given claims.json spans): 0/23 false flags but
+          spurious choices: extraction had truncated Defs 1, 2, 6. Fixed:
+          extract expands spans to the whole theorem-like environment (warns
+          when content was missing); comparer gets the full paper
+        - Round 2 variants: 4/6; comparer excused an added hypothesis and a
+          wrong lexical entry as =choice=. Tightened =compare.md=: choice only
+          when the paper's text supports both readings; the paper's
+          definitions govern over its derived claims
+        - Round 3 (accepted): faithful 0/23 flagged (only choice: pred3's real
+          ambiguity), variants 6/6 flagged (=tests/backtranslate_variants.py=).
+          The =Nonempty D= variant was vacuous (=Model= has =ann : D=) — the
+          comparer said so; replaced by =∃ x, M.linguist x=. ~$0.09/claim
+  - [ ] Back-translation of definitions (checkpoint 2), mechanical unfolding
+        in Lean, glossary/slicing of Defs.lean for big papers; wire flags
+        into the review files
   - [ ] Blind back-translation (SPEC.md §4): separate backend call made by
         the runner (not an agent sub-agent) sees only
         comment-stripped Lean + glossary → surface + unfolded English

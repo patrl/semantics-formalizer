@@ -434,7 +434,8 @@ and is never shown to the pipeline.
   one query about a sentence that is not in the paper.
 - Blind back-translation catches unfaithful formalizations without
   crying wolf. On deliberately unfaithful variants:
-  - claim statements: (2) ⊨ (3) with a non-empty-domain hypothesis added,
+  - claim statements: (2) ⊨ (3) with a non-emptiness hypothesis added (on
+    the restrictor: toy models always have a non-empty domain),
     Prop 4 with `some` replaced by `every`, a TC with the scope of
     negation flipped;
   - definitions, where only the unfolded reading can show the error: a
