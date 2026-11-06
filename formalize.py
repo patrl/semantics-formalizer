@@ -2,19 +2,20 @@
 """Barebones auto-formalizer for semantics papers.
 
 Usage:
-    python3 formalize.py extract examples/toy/paper.tex   # -> claims.json
-    python3 formalize.py defs    examples/toy/paper.tex   # -> Defs.lean
-    python3 formalize.py state   examples/toy/paper.tex [claim-id]
-                                                  # -> statements.json
-    python3 formalize.py prove   examples/toy/paper.tex [claim-id]
-                                                  # -> claims/<id>.lean, results.json
+    python3 formalize.py extract PAPER.tex            # -> claims.json
+    python3 formalize.py defs    PAPER.tex            # -> Defs.lean
+    python3 formalize.py state   PAPER.tex [claim-id] # -> statements.json
+    python3 formalize.py prove   PAPER.tex [claim-id] # -> claims/<id>.lean, results.json
 
 Review statements.json (edit or delete entries) before running `prove`:
 the prover proves or refutes each statement exactly as written there.
 
-Every step writes its output under runs/<paper-name>/ so you can inspect it.
+Every step writes its output to the run directory: runs/<paper name>/ by
+default (the folder's name if the file is called paper.tex, main.tex, ...),
+or --out DIR. See README.md.
 """
 
+import argparse
 import json
 import re
 import subprocess
@@ -457,20 +458,54 @@ def prove(run_dir: Path, only: str | None = None) -> None:
 
 # --- CLI ---------------------------------------------------------------------
 
-def main() -> None:
-    if len(sys.argv) not in (3, 4) or sys.argv[1] not in {"extract", "defs", "state", "prove"}:
-        sys.exit(__doc__)
-    step, paper = sys.argv[1], Path(sys.argv[2])
-    run_dir = RUNS / paper.parent.name
+# File names that say nothing about the paper; their run is named after the folder.
+GENERIC_STEMS = {"paper", "main", "article", "manuscript", "draft"}
+
+
+def run_dir_for(paper: Path, out: str | None) -> Path:
+    """The run directory for `paper`, refusing one that belongs to another paper."""
+    if out:
+        run_dir = Path(out)
+    else:
+        name = paper.stem
+        if name.lower() in GENERIC_STEMS:
+            name = paper.resolve().parent.name
+        run_dir = RUNS / name
     run_dir.mkdir(parents=True, exist_ok=True)
-    if step == "extract":
-        extract(paper, run_dir)
-    elif step == "defs":
-        defs(paper, run_dir)
-    elif step == "state":
-        state(run_dir, sys.argv[3] if len(sys.argv) == 4 else None)
-    elif step == "prove":
-        prove(run_dir, sys.argv[3] if len(sys.argv) == 4 else None)
+    marker, source = run_dir / "paper.path", str(paper.resolve())
+    if marker.exists() and marker.read_text().strip() != source:
+        sys.exit(f"{run_dir} holds the run for {marker.read_text().strip()},\n"
+                 f"not {source}. Use --out DIR to choose another run directory.")
+    marker.write_text(source + "\n")
+    return run_dir
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Formalize a semantics paper in Lean, one step at a time.",
+        epilog="Steps, in order: extract, defs, state, prove. "
+               "Review statements.json before running prove.")
+    parser.add_argument("step", choices=["extract", "defs", "state", "prove"])
+    parser.add_argument("paper", type=Path, help="the paper's LaTeX source (one .tex file)")
+    parser.add_argument("claim", nargs="?",
+                        help="state/prove: only this claim id (default: all claims)")
+    parser.add_argument("--out", metavar="DIR",
+                        help="run directory (default: runs/<paper name>)")
+    args = parser.parse_args()
+    if not args.paper.is_file():
+        parser.error(f"no such file: {args.paper}")
+    if args.claim and args.step in ("extract", "defs"):
+        parser.error(f"{args.step} takes no claim id")
+    run_dir = run_dir_for(args.paper, args.out)
+    print(f"run directory: {run_dir}")
+    if args.step == "extract":
+        extract(args.paper, run_dir)
+    elif args.step == "defs":
+        defs(args.paper, run_dir)
+    elif args.step == "state":
+        state(run_dir, args.claim)
+    elif args.step == "prove":
+        prove(run_dir, args.claim)
 
 
 if __name__ == "__main__":

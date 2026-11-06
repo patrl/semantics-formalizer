@@ -325,6 +325,12 @@ Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
   - [ ] =open= claims with bounded-check status; =--auto= items marked unreviewed
 
 * TODO Run directory and logging (SPEC.md §3, §8)
+  - [X] Run directory per paper, not per parent folder (2026-11-06):
+        =runs/<stem>=, or the folder's name for generic stems (=paper=,
+        =main=, …), or =--out DIR=; =paper.path= marker refuses reuse for a
+        different paper. CLI now =argparse= (=--help=, checks the file exists)
+  - [X] README for outside users: requirements, quickstart, what to check
+        after each step, outcomes, what's not there yet
   - [X] =claims.json=: add source location (done: =locate()=, see Step 1)
   - [ ] =log/=: every model call, Lean attempt and decision — as JSON Lines
         (append-only, survives a crash mid-run)
