@@ -245,6 +245,19 @@ Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
         =prove=); move to =review/state.md= + =decisions.json= with the rest
         of the checkpoint machinery. =prove= should also refuse statements
         whose claim or =Defs.lean= changed since they were written
+  - [ ] To decide here (discussed 2026-11-06): human-edited artefacts in
+        the format people work in, not JSON. Statements as a generated
+        =Statements.lean= (=def <id>_stmt : Prop := …= with the claim's
+        LaTeX in the docstring), reviewed and edited in an editor with the
+        Lean LSP; =prove= builds headers from those defs, so the frozen-
+        statement check becomes a type comparison. Review notes and
+        decisions in =review/<stage>.md= (already planned). Keep JSON for
+        model replies (=--json-schema=) and runner-only files. Why: in
+        =statements.json= the Lean is an unchecked string, notes are one
+        line of =\n= escapes, no comments, one missing comma breaks it.
+        YAML/TOML considered: YAML needs a dependency and its implicit
+        typing clashes with Lean syntax; TOML has no stdlib writer.
+        Update SPEC.md §3 if adopted
   - [ ] Example models in review files (stages 2–3), from the executable
         fragment — needs Oracle below
   - [ ] =--auto= mode, output marked unreviewed
@@ -312,12 +325,21 @@ Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
   - [ ] =open= claims with bounded-check status; =--auto= items marked unreviewed
 
 * TODO Run directory and logging (SPEC.md §3, §8)
-  - [ ] =claims.json=: add source location (=example= kind is under Toy paper v2)
-  - [ ] =log/=: every model call, Lean attempt and decision
+  - [X] =claims.json=: add source location (done: =locate()=, see Step 1)
+  - [ ] =log/=: every model call, Lean attempt and decision — as JSON Lines
+        (append-only, survives a crash mid-run)
   - [ ] Cost and time recorded per stage (currently only printed)
   - [ ] *Do the build properly* — required by SPEC.md §8: make =runs/<paper>/=
         a Lake project so claim files =import Defs= instead of pasting it.
         Needed before real papers (big Defs, Mathlib)
+  - [ ] To decide with the Lake step (discussed 2026-11-06): keep Python as
+        the orchestrator (JSON, templates, subprocesses; bash rejected:
+        quoting LaTeX/Lean, JSON via =jq=, silent failures), but move the
+        audit into a small Lean checker the runner calls: given a module and
+        the expected statement, report new declarations, axioms used, and
+        whether the theorem's type equals the frozen statement — read from
+        the elaborated environment, not regexes over source text (which
+        macros/notation could evade). Regex scan stays as a fast first pass
 
 * TODO Inputs (SPEC.md §2)
   - [ ] Deterministic preprocessing in the runner → =runs/<paper>/source/=
