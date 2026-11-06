@@ -136,7 +136,15 @@ Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
         mismatch), =IsTrue=, =Entails=/=Contradictory= over postulate-respecting
         models, =ex1=–=ex6= as LF defs. No hand-written sentence TCs.
         Interpretive choices in =runs/toy/Defs.notes.md= (checkpoint 2)
-  - [ ] State + prove on v2 (stop after =state= to review statements)
+  - [-] State + prove on v2 (stop after =state= to review statements)
+    - [X] State (2026-11-06, $0.75, 14/14 first attempt): all faithful on
+          review. tc1/tc2 also pin down the FA result (=interp M ex = some …=);
+          pred3 read as truth preservation within each model where ann is a
+          linguist (flagged: Def 4 has no "entails in a model"); tc4 states the
+          paper's mis-derived TC as written
+    - [ ] Prove — waiting on the user's review of =runs/toy/statements.json=.
+          Expected: 10 proved; tc4, prop4, claim_some_phon, claim_every_some
+          disproved
   - [X] Not every paper has LFs: many give intuitive translations into FOL or
         another representation language. Generalized: extract field =lf= →
         =analysis= (=LF: …= / =FOL: …=, one per reading); =defs.md= formalizes
@@ -146,8 +154,28 @@ Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
         translations) transcribed as given; shallow embedding allowed unless
         claims are about the representations themselves. Several readings →
         =<id>_a=, =<id>_b=, … Not yet tested live
-  - [ ] =runs/toy/claims.json= and =Defs.lean= predate the =lf= → =analysis=
-        rename: re-run extract + defs on v2 as a regression check
+  - [X] =runs/toy/claims.json= and =Defs.lean= predate the =lf= → =analysis=
+        rename: re-run extract + defs on v2 as a regression check (2026-11-06;
+        old outputs in =runs/toy/pre-analysis/=)
+    - [X] First rerun ($0.22): 14 expected claims, all 4 planted errors
+          flagged, LFs correct, but three regressions: 5 claims listed derived
+          TCs in =depends_on=; a duplicate =def_lf= item holding the sentences'
+          LFs (the prompt contradicted itself: definitions included "assumed
+          LFs", examples said LFs belong to the example); a signposting
+          sentence extracted as a claim. Kept as =runs/toy/claims.run3.json=
+    - [X] Fix in =extract.md=: claims never in =depends_on= (claims relied on
+          go in =cites=, explicit or not); only /general/ representation
+          conventions are definitions; claims must be true-or-false of the
+          definitions (no signposting)
+    - [X] Second rerun ($0.22): exactly 14 claims + 6 examples + 9
+          definitions; no claims in =depends_on= (predictions cite their TCs);
+          LF convention is one =def_syntax=; all 4 planted errors flagged. One
+          new slip: =def_syntax='s =latex= dropped a few characters; the
+          runner's =locate()= caught it (warning, =source: null=)
+    - [X] Defs (1 attempt): same design as before — =Ty=/=Den=, =Model=,
+          LF trees with =Cat=, one generic =interp= (TN + order-free FA,
+          =Option= on mismatch), postulate built into =Entails=; no
+          non-emptiness; no hand-written TCs
   - [X] Second toy paper in the translation style: =examples/toy-fol/=
         (=paper.tex= compiles; =EXPECTED.md=). FOL translations only; (1), (2)
         have surface/inverse readings; (5)'s translation given only
