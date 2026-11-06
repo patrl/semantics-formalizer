@@ -31,7 +31,8 @@ progress.
   no tools, settings, MCP servers or project memory, so the model sees only
   the prompt.
 
-Cost: a run on one of the toy papers costs about $2–3 in model usage.
+Cost: a run on one of the toy papers costs about $3–5 in model usage
+(back-translation is about $0.10 per claim).
 
 ## Quickstart
 
@@ -42,11 +43,12 @@ author macros are not yet expanded).
 python3 formalize.py extract mypaper.tex   # 1. definitions, examples, claims
 python3 formalize.py defs    mypaper.tex   # 2. definitions in Lean
 python3 formalize.py state   mypaper.tex   # 3. each claim as a Lean statement
+python3 formalize.py backtranslate mypaper.tex  # 3b. blind check of each statement
 #    review runs/mypaper/statements.json here (see below)
 python3 formalize.py prove   mypaper.tex   # 4. prove or refute each statement
 ```
 
-`state` and `prove` take an optional claim id to do one claim only, e.g.
+`state`, `backtranslate` and `prove` take an optional claim id to do one claim only, e.g.
 `python3 formalize.py prove mypaper.tex prop3`.
 
 Outputs go to `runs/<paper name>/`: the file's name, or its folder's name
@@ -82,6 +84,24 @@ an earlier output, rerun the steps after it.
    each statement exactly as written, so a statement that doesn't match the
    paper gives a meaningless result. Edit a `statement` to fix it, or
    delete an entry to skip that claim.
+
+   **`backtranslate` → `backtranslations.json`** helps with this review
+   without reading Lean. For each statement, a model that sees only the
+   Lean (comments, docstrings, claim ids and the paper all withheld) says
+   in English what it says, both in the formalization's terms
+   (`surface`) and with the definitions expanded down to truth conditions
+   (`unfolded`). A second model compares that with the paper and lists the
+   differences:
+   - `substantive`: the truth conditions differ (the item is `flagged`);
+     look at these first;
+   - `choice`: the paper is ambiguous and the statement takes one
+     reading; check it's the one you want;
+   - `wording`: same truth conditions, different phrasing.
+
+   It judges faithfulness to the paper, not truth: a false claim stated
+   faithfully shows no difference. A clean result is evidence, not a
+   substitute for your review. If you edit a statement, rerun
+   `backtranslate` on it.
 4. **`prove` → `results.json`, `claims/<id>.lean`.** For each claim, the
    outcome:
    - `proved`: the statement holds; the proof is `theorem <id>`.
@@ -101,7 +121,6 @@ compiler output in `*.attemptN.log`), so you can see what was tried.
 ## Not yet
 
 Planned (see TODO.org): a final report; reviews in Lean and Markdown rather
-than JSON; detecting stale outputs; a blind back-translation of each
-statement into English, to catch unfaithful formalizations without reading
-Lean; a guided mode that walks you through the reviews; multi-file LaTeX
-and PDF input.
+than JSON; detecting stale outputs; back-translation of the definitions
+(checkpoint 2), not only the statements; a guided mode that walks you
+through the reviews; multi-file LaTeX and PDF input.

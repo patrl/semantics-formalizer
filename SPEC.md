@@ -213,6 +213,13 @@ and every claim statement. It runs before the review file is written.
      conditions over models (e.g. "in every model, if every linguist
      sneezed then some linguist sneezed").
 
+   *As built (2026-11-06):* the translator gets the whole stripped
+   `Defs.lean` rather than a slice of it, so its identifier names and types
+   serve as the glossary; and it does the unfolding itself (mechanical
+   unfolding in Lean is not built yet). The comparer gets the claim's LaTeX
+   and the verbatim LaTeX of the paper's definitions and examples (from
+   `claims.json`), not the extractor's paraphrases.
+
    The unfolded reading is what makes the check bite on claims. A claim
    stated in terms of `Defs.lean` matches the paper trivially at the
    surface, even when the definitions underneath are wrong. Where
@@ -262,11 +269,18 @@ and every claim statement. It runs before the review file is written.
      (an added or missing hypothesis, a different quantifier or scope, a
      narrower or wider domain, a reversed direction). Where it can, it
      gives that model;
+   - **choice**: the paper is ambiguous or underspecified at this point,
+     and the formalization takes one reasonable reading; the comparison
+     names the other reading. (E.g. "in any model where ann is a linguist,
+     (2) entails (1)", where the paper's entailment quantifies over all
+     models.) This surfaces the ambiguity without calling it an error;
    - **wording**: phrasing, notation, or order differ but the truth
      conditions are the same.
 
    If there is no difference, the result is "none found".
-4. **Use.** Only a **substantive** difference flags the item. A flagged
+4. **Use.** Only a **substantive** difference flags the item. A
+   **choice** is put to the user as a question about the reading (rule
+   "Ambiguity is surfaced, not resolved" below) but doesn't flag the item. A flagged
    item is never approved automatically, not even under `--auto`. The
    orchestrator recommends redoing it or puts it to the user. Wording
    differences are shown in the review file but neither flag the item

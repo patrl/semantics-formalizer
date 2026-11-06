@@ -5,6 +5,7 @@ Usage:
     python3 formalize.py extract PAPER.tex            # -> claims.json
     python3 formalize.py defs    PAPER.tex            # -> Defs.lean
     python3 formalize.py state   PAPER.tex [claim-id] # -> statements.json
+    python3 formalize.py backtranslate PAPER.tex [claim-id] # -> backtranslations.json
     python3 formalize.py prove   PAPER.tex [claim-id] # -> claims/<id>.lean, results.json
 
 Review statements.json (edit or delete entries) before running `prove`:
@@ -88,8 +89,8 @@ CLAIMS_SCHEMA = {
 }
 
 
-def locate(tex: str, latex: str) -> dict | None:
-    """Where `latex` occurs verbatim in `tex` (up to whitespace): lines and section."""
+def find_span(tex: str, latex: str) -> tuple[int, int] | None:
+    """Character offsets [start, end) of `latex` in `tex`, matching up to whitespace."""
     norm, pos = [], []                  # tex with whitespace runs collapsed, and
     for i, c in enumerate(tex):         # each kept character's offset in tex
         if c.isspace():
@@ -102,10 +103,51 @@ def locate(tex: str, latex: str) -> dict | None:
     k = "".join(norm).find(needle) if needle else -1
     if k < 0:
         return None
-    start, end = pos[k], pos[k + len(needle) - 1]
+    return pos[k], pos[k + len(needle) - 1] + 1
+
+
+def locate(tex: str, latex: str) -> dict | None:
+    """Where `latex` occurs verbatim in `tex` (up to whitespace): lines and section."""
+    span = find_span(tex, latex)
+    if span is None:
+        return None
+    start, end = span
     sections = re.findall(r"\\(?:sub)*section\*?\{([^}]*)\}", tex[:start])
-    return {"lines": [tex.count("\n", 0, start) + 1, tex.count("\n", 0, end) + 1],
+    return {"lines": [tex.count("\n", 0, start) + 1, tex.count("\n", 0, end - 1) + 1],
             "section": sections[-1] if sections else None}
+
+
+def env_body(env: str) -> str:
+    """An environment's content without `\\begin{…}[…]`, labels and `\\end{…}`, whitespace-normalized."""
+    body = re.sub(r"^\\begin\{\w+\*?\}(\[[^\]]*\])?", "", env.strip())
+    body = re.sub(r"\\end\{\w+\*?\}$", "", body.strip())
+    return " ".join(re.sub(r"\\label\{[^}]*\}", "", body).split())
+
+
+THEOREM_LIKE = {"definition", "theorem", "proposition", "lemma", "corollary", "fact",
+                "claim", "conjecture", "observation", "prediction", "generalization",
+                "hypothesis", "principle", "assumption", "remark"}
+
+
+def whole_environment(tex: str, latex: str) -> str | None:
+    """If `latex` is part of a theorem-like environment but not all of it, the whole one.
+
+    Extraction sometimes copies one line of a definition; the comparison
+    and the review need the item as the paper states it.
+    """
+    span = find_span(tex, latex)
+    if span is None:
+        return None
+    names = THEOREM_LIKE | set(re.findall(r"\\newtheorem\*?\{(\w+)\}", tex))
+    for begin in re.finditer(r"\\begin\{(\w+)\*?\}", tex[:span[0] + 1]):
+        if begin.group(1) not in names:
+            continue
+        end = tex.find(f"\\end{{{begin.group(1)}", begin.end())
+        end = tex.find("}", end) + 1 if end >= 0 else -1
+        if begin.start() <= span[0] and span[1] <= end:
+            whole = tex[begin.start():end]
+            return whole if " ".join(whole.split()) != " ".join(latex.split()) else None
+    return None
 
 
 def extract(paper: Path, run_dir: Path) -> None:
@@ -116,6 +158,10 @@ def extract(paper: Path, run_dir: Path) -> None:
     seen = set()
     for item in result["items"]:
         # Located by us, not the model; not found means `latex` isn't verbatim.
+        item_latex = item["latex"]
+        expanded = whole_environment(tex, item_latex)
+        if expanded:
+            item["latex"] = expanded
         item["source"] = locate(tex, item["latex"])
         problems = [f"depends on unknown or later item {d}"
                     for d in item["depends_on"] if d not in seen]
@@ -127,6 +173,8 @@ def extract(paper: Path, run_dir: Path) -> None:
             problems.append("duplicate id")
         if item["source"] is None:
             problems.append("latex not found verbatim in the paper")
+        if expanded and env_body(expanded) != " ".join(item_latex.split()):
+            problems.append("latex was only part of its environment: expanded to the whole")
         seen.add(item["id"])
         where = f"l.{item['source']['lines'][0]}" if item["source"] else "l.?"
         print(f"  {item['id']:16} {item['kind']:10} {where:6} {item['label']}")
@@ -183,8 +231,36 @@ COMMANDS = SCOPE_CHANGES + [r"(?m)^\s*(?:theorem|lemma|example|#\w+)\b"]
 
 
 def strip_comments(code: str) -> str:
-    code = re.sub(r"/-.*?-/", "", code, flags=re.S)
-    return re.sub(r"--.*", "", code)
+    """Remove Lean comments, docstrings included: `-- …` and nested `/- … -/`.
+
+    String and character literals are kept whole, so a `--` inside one doesn't
+    start a comment.
+    """
+    out, i, n = [], 0, len(code)
+    while i < n:
+        if code.startswith("/-", i):
+            depth, i = 1, i + 2
+            while i < n and depth:
+                if code.startswith("/-", i):
+                    depth, i = depth + 1, i + 2
+                elif code.startswith("-/", i):
+                    depth, i = depth - 1, i + 2
+                else:
+                    i += 1
+            out.append(" ")
+        elif code.startswith("--", i):
+            while i < n and code[i] != "\n":
+                i += 1
+        elif code[i] == '"' or (code[i] == "'" and re.match(r"'(\\.|[^\\'])'", code[i:i + 4])):
+            quote, j = code[i], i + 1
+            while j < n and code[j] != quote:
+                j += 2 if code[j] == "\\" else 1
+            out.append(code[i:j + 1])
+            i = j + 1
+        else:
+            out.append(code[i])
+            i += 1
+    return "".join(out)
 
 
 def audit(code: str, log: str, forbidden: list[str],
@@ -265,7 +341,8 @@ def write_lean(task: str, out_path: Path, schema: dict = LEAN_SCHEMA,
     return None
 
 
-BULKY = ("defs", "claim", "statement", "front_matter", "definitions", "examples")
+BULKY = ("defs", "claim", "statement", "front_matter", "definitions", "examples",
+         "surface", "unfolded", "paper")
 
 
 def fill(template: str, **fields: str) -> str:
@@ -384,6 +461,105 @@ def state(run_dir: Path, only: str | None = None) -> None:
     print(f"\nreview {path} before running `prove`")
 
 
+# --- Step 3b: blind back-translation ------------------------------------------
+
+BACK_SCHEMA = {
+    "type": "object",
+    "properties": {"surface": {"type": "string"}, "unfolded": {"type": "string"}},
+    "required": ["surface", "unfolded"],
+}
+
+COMPARE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "differences": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "reading": {"enum": ["surface", "unfolded"]},
+                    "class": {"enum": ["substantive", "choice", "wording"]},
+                    "description": {"type": "string"},
+                    "model": {"type": "string"},
+                },
+                "required": ["reading", "class", "description", "model"],
+            },
+        },
+    },
+    "required": ["differences"],
+}
+
+NEUTRAL_NAMESPACE = "Paper"
+
+
+def blind_defs(defs_lean: str) -> str:
+    """Defs.lean as the translator may see it.
+
+    Comments and docstrings are stripped (they cite the paper), and the
+    namespace, which is named after the paper, is renamed to a neutral one.
+    """
+    ns = paper_namespace(defs_lean)
+    bare = re.sub(rf"\b{re.escape(ns)}\b", NEUTRAL_NAMESPACE, strip_comments(defs_lean))
+    return re.sub(r"\n\s*\n+", "\n\n", "\n".join(l.rstrip() for l in bare.splitlines())).strip()
+
+
+def translator_prompt(defs_lean: str, statement: str) -> str:
+    """The translator's whole input: stripped Lean and the bare statement.
+
+    Built here, from these two arguments only, so that nothing else (the
+    paper, claim ids, notes) can reach it.
+    """
+    return fill((PROMPTS / "backtranslate.md").read_text(),
+                defs=blind_defs(defs_lean), statement=strip_comments(statement).strip())
+
+
+def backtranslate(paper: Path, run_dir: Path, only: str | None = None) -> None:
+    """Blind back-translation of each statement, compared with the paper.
+
+    The translator sees only stripped Lean (`translator_prompt`). The
+    comparer sees the readings next to the claim and the whole paper, so it
+    has the paper's own definitions, examples and translations, however
+    well or badly extraction copied them.
+    """
+    defs_lean = (run_dir / "Defs.lean").read_text()
+    statements = json.loads((run_dir / "statements.json").read_text())
+    tex = paper.read_text()
+    out_dir = run_dir / "backtranslations"
+    out_dir.mkdir(exist_ok=True)
+    path = run_dir / "backtranslations.json"
+    results = json.loads(path.read_text()) if path.exists() else {}
+
+    for item in claim_items(run_dir, only):
+        cid = item["id"]
+        if cid not in statements:
+            print(f"skip {cid}: no statement (run `state`)")
+            continue
+        statement = statements[cid]["statement"]
+        print(f"back-translate {cid} ({item['label']})")
+        prompt = translator_prompt(defs_lean, statement)
+        (out_dir / f"{cid}.prompt.md").write_text(prompt)   # kept for auditing isolation
+        reading = call_claude(prompt, BACK_SCHEMA)
+        print(f"compare {cid}")
+        diffs = call_claude(fill((PROMPTS / "compare.md").read_text(),
+                                 claim=item["latex"], paper=tex,
+                                 surface=reading["surface"], unfolded=reading["unfolded"]),
+                            COMPARE_SCHEMA)["differences"]
+        flagged = any(d["class"] == "substantive" for d in diffs)
+        results[cid] = {"statement": statement, **reading, "differences": diffs,
+                        "flagged": flagged}
+        for d in diffs:
+            print(f"  {d['class']:11} ({d['reading']}) {d['description']}")
+        print(f"  => {'FLAGGED' if flagged else 'no substantive difference'}")
+        path.write_text(json.dumps(results, indent=2, ensure_ascii=False) + "\n")
+
+    print("\nsummary:")
+    for cid, r in results.items():
+        counts = {c: sum(d["class"] == c for d in r["differences"])
+                  for c in ("substantive", "choice", "wording")}
+        print(f"  {cid:16} {'FLAGGED' if r['flagged'] else 'ok':8} "
+              + ", ".join(f"{n} {c}" for c, n in counts.items() if n))
+
+
 # --- Step 4: prove / refute ---------------------------------------------------
 
 PROVE_SCHEMA = {
@@ -483,12 +659,13 @@ def run_dir_for(paper: Path, out: str | None) -> Path:
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Formalize a semantics paper in Lean, one step at a time.",
-        epilog="Steps, in order: extract, defs, state, prove. "
-               "Review statements.json before running prove.")
-    parser.add_argument("step", choices=["extract", "defs", "state", "prove"])
+        epilog="Steps, in order: extract, defs, state, backtranslate, prove. "
+               "Review statements.json (with backtranslations.json) before running prove.")
+    parser.add_argument("step", choices=["extract", "defs", "state", "backtranslate", "prove"])
     parser.add_argument("paper", type=Path, help="the paper's LaTeX source (one .tex file)")
     parser.add_argument("claim", nargs="?",
-                        help="state/prove: only this claim id (default: all claims)")
+                        help="state/backtranslate/prove: only this claim id "
+                             "(default: all claims)")
     parser.add_argument("--out", metavar="DIR",
                         help="run directory (default: runs/<paper name>)")
     args = parser.parse_args()
@@ -504,6 +681,8 @@ def main() -> None:
         defs(args.paper, run_dir)
     elif args.step == "state":
         state(run_dir, args.claim)
+    elif args.step == "backtranslate":
+        backtranslate(args.paper, run_dir, args.claim)
     elif args.step == "prove":
         prove(run_dir, args.claim)
 

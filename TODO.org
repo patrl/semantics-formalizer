@@ -213,6 +213,22 @@ Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
   - [ ] Runner: halt/resume with state on disk; read =decisions.json=
   - [ ] Review files: LaTeX, =#check=, blind back-translation, example models,
         recommendation, =decision:= line
+  - [-] Blind back-translation, statements only (2026-11-06): =backtranslate=
+        stage, =prompts/backtranslate.md= + =compare.md=, classes substantive /
+        choice / wording (choice added to SPEC §4). Isolation: offline canary
+        test + live context probe pass (=tests/test_isolation.py [--live]=).
+        Round 1 (comparer given claims.json spans): 0/23 false flags, but
+        spurious choices — extraction had truncated Defs 1, 2, 6 to one line.
+        Fixed: extract expands spans to the whole theorem-like environment
+        (applied to existing runs/toy, runs/toy-fol claims.json); comparer now
+        gets the full paper. Variants (=tests/backtranslate_variants.py=): 4/6
+        flagged; missed nonempty-hypothesis and no-negation-scope (comparer
+        excused both as =choice=). =compare.md= tightened (choice only when the
+        paper's text supports both readings; paper's definitions govern) —
+        NOT yet rerun: usage limit hit mid-run.
+        Next: rerun variants (all 6 must flag) + both faithful runs (0 flags);
+        round-1 results in =runs/*/backtranslations.round1.json=. Then
+        definitions (checkpoint 2), mechanical unfolding
   - [ ] Blind back-translation (SPEC.md §4): separate backend call made by
         the runner (not an agent sub-agent) sees only
         comment-stripped Lean + glossary → surface + unfolded English
