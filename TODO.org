@@ -397,8 +397,34 @@ Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
         results against =EXPECTED.md=
   - [ ] Planted unfaithful variants for back-translation (see Checkpoints)
   - [ ] Keep the fake-model cheat suite as a test
-  - [ ] Real published paper with a hand-checked answer key, before calling
-        the project usable
+  - [-] Real published paper with a hand-checked answer key, before calling
+        the project usable. First: =papers/ElliottHisaoKobayashi2026/=
+        (Elliott & Kobayashi, nested which-phrases and pied-piping; 84k chars;
+        =paper.tex= = =main.tex= flattened with =latexpand= after copying
+        =additionalBoilerplate.tex= + =acronyms.tex= from =~/repos/nested-wh=)
+    - [X] Extract (2026-11-06, $2.04, 634s): 154 items (75 claims, 61
+          examples, 18 definitions), all located; covers the whole paper
+    - [X] Defs ($1.63, 581s, 1 attempt): 757-line deep embedding — typed LFs,
+          one generic =interp= (FA, IFA, PA, ↓, Q/?/which entries), Option for
+          undefinedness, polymorphic vs strict Q as a =Mode=, A-over-A and
+          no-unnesting as predicates on LFs; 90 example defs. Notes flag
+          possible issues for the author: under strict Q, (44) fails to type
+          though the paper says it stays licit; (55b) and (79) don't compose
+          as given; ∃-closure and how pointwise Ans combines are unspecified
+    - [ ] Author review of =Defs.notes.md= (checkpoint 2) before =state=
+    - [ ] Decide scope before =state=: claims are of five kinds — data
+          (judgments, ~20), derived denotations (~26), typing (~5), claims
+          about all derivations (A-over-A blocks every PL LF, ~10), other
+          theories (Fox & Sudo, Charlow on indefinites, ~12). Start with one
+          section (e.g. denotations in §2–3.2)
+  - [ ] Extract: tag each claim's kind (data / derivation / typing /
+        metatheoretic / other theory); =state= skips data claims or states
+        them as predictions. Found on the real paper
+  - [ ] Runner: =depends_on= may point forward — real papers state a claim
+        before the example illustrating it (29 false warnings on the real
+        paper); warn only on unknown ids
+  - [ ] Cost at scale: comparer sends the whole paper per claim (84k chars);
+        consider sending the relevant section(s) plus definitions
 
 * TODO Later / maybe
   - [ ] *Build on linglib* (deferred 2026-11-05; next step would be
