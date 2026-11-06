@@ -252,7 +252,8 @@ def write_lean(task: str, out_path: Path, schema: dict = LEAN_SCHEMA,
             out_path.write_text(prefix + code + suffix)
             print(f"  passed -> {out_path.name}")
             return answer | facts | {"attempts": n}
-        first = (problems or log.strip().splitlines() or ["(no output)"])[0]
+        # A compile error also shows up as sorryAx in the audit; report the cause.
+        first = ((log.strip().splitlines() if not ok else []) or problems or ["(no output)"])[0]
         print(f"  failed: {first}")
         prompt = (task
                   + "\n\n--- YOUR PREVIOUS ATTEMPT (as compiled, after DEFINITIONS) ---\n" + code
