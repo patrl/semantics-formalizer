@@ -112,9 +112,19 @@ def locate(tex: str, latex: str) -> dict | None:
     if span is None:
         return None
     start, end = span
-    sections = re.findall(r"\\(?:sub)*section\*?\{([^}]*)\}", tex[:start])
+    sections = [braced(tex, m.end()) for m in
+                re.finditer(r"\\(?:sub)*section\*?(?:\[[^\]]*\])?\{", tex[:start])]
     return {"lines": [tex.count("\n", 0, start) + 1, tex.count("\n", 0, end - 1) + 1],
-            "section": sections[-1] if sections else None}
+            "section": " ".join(sections[-1].split()) if sections else None}
+
+
+def braced(tex: str, i: int) -> str:
+    """The text from `i` up to the `}` that closes the `{` just before it."""
+    depth, j = 1, i
+    while j < len(tex) and depth:
+        depth += {"{": 1, "}": -1}.get(tex[j], 0)
+        j += 1
+    return tex[i:j - 1]
 
 
 def env_body(env: str) -> str:

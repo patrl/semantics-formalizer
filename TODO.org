@@ -411,7 +411,11 @@ Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
           possible issues for the author: under strict Q, (44) fails to type
           though the paper says it stays licit; (55b) and (79) don't compose
           as given; ∃-closure and how pointwise Ans combines are unspecified
-    - [ ] Author review of =Defs.notes.md= (checkpoint 2) before =state=
+    - [-] Author review of =Defs.notes.md= (checkpoint 2) before =state=
+      - [X] (44) failing to type under strict Q: confirmed correct by the
+            author (a real discrepancy with the paper's text), and harmless —
+            (44) is meant to be ruled out anyway. First genuine finding on a
+            real paper
     - [ ] Decide scope before =state=: claims are of five kinds — data
           (judgments, ~20), derived denotations (~26), typing (~5), claims
           about all derivations (A-over-A blocks every PL LF, ~10), other
@@ -423,6 +427,8 @@ Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
   - [ ] Runner: =depends_on= may point forward — real papers state a claim
         before the example illustrating it (29 false warnings on the real
         paper); warn only on unknown ids
+  - [X] Section titles with macros (=\ac{sp} readings=) were cut at the first
+        =}=; =locate()= now matches braces (fixed 2026-11-06)
   - [ ] Cost at scale: comparer sends the whole paper per claim (84k chars);
         consider sending the relevant section(s) plus definitions
 
