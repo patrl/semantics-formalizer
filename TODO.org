@@ -363,6 +363,9 @@ Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
         different paper. CLI now =argparse= (=--help=, checks the file exists)
   - [X] README for outside users: requirements, quickstart, what to check
         after each step, outcomes, what's not there yet
+  - [X] Paper sources go in =papers/<author-year>/paper.tex= (+ optional
+        =EXPECTED.md=); git-ignored except =papers/README.md= (copyright);
+        answer keys can be force-added
   - [X] =claims.json=: add source location (done: =locate()=, see Step 1)
   - [ ] =log/=: every model call, Lean attempt and decision — as JSON Lines
         (append-only, survives a crash mid-run)

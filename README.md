@@ -36,20 +36,24 @@ Cost: a run on one of the toy papers costs about $3–5 in model usage
 
 ## Quickstart
 
-The paper must be a single self-contained `.tex` file (no `\input`, and
-author macros are not yet expanded).
+Put each paper in its own directory under `papers/`, e.g.
+`papers/smith-2019/paper.tex` (see [papers/README.md](papers/README.md));
+paper sources there are git-ignored. The paper must be a single
+self-contained `.tex` file (no `\input`, and author macros are not yet
+expanded).
 
 ```sh
-python3 formalize.py extract mypaper.tex   # 1. definitions, examples, claims
-python3 formalize.py defs    mypaper.tex   # 2. definitions in Lean
-python3 formalize.py state   mypaper.tex   # 3. each claim as a Lean statement
-python3 formalize.py backtranslate mypaper.tex  # 3b. blind check of each statement
-#    review runs/mypaper/statements.json here (see below)
-python3 formalize.py prove   mypaper.tex   # 4. prove or refute each statement
+P=papers/smith-2019/paper.tex
+python3 formalize.py extract $P         # 1. definitions, examples, claims
+python3 formalize.py defs    $P         # 2. definitions in Lean
+python3 formalize.py state   $P         # 3. each claim as a Lean statement
+python3 formalize.py backtranslate $P   # 3b. blind check of each statement
+#    review runs/smith-2019/statements.json here (see below)
+python3 formalize.py prove   $P         # 4. prove or refute each statement
 ```
 
 `state`, `backtranslate` and `prove` take an optional claim id to do one claim only, e.g.
-`python3 formalize.py prove mypaper.tex prop3`.
+`python3 formalize.py prove $P prop3`.
 
 Outputs go to `runs/<paper name>/`: the file's name, or its folder's name
 if the file is called `paper.tex`, `main.tex` and so on. Use `--out DIR`

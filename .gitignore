@@ -6,3 +6,8 @@ __pycache__/
 
 # Pipeline output (regenerate with formalize.py)
 runs/
+
+# Paper sources (often not redistributable); commit an answer key with
+# `git add -f papers/<name>/EXPECTED.md` if you want it in the suite
+papers/*
+!papers/README.md
