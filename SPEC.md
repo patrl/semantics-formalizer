@@ -57,6 +57,7 @@ Everything goes in one run directory per paper (currently `runs/<paper>/`).
 | `source/` | The preprocessed paper (flattened, macros expanded, or converted from PDF) plus the original (§2) |
 | `claims.json` | Extracted items: id, kind (`definition` / `claim` / `example`), label, verbatim LaTeX, faithful informal statement, analysis (examples: the LF and/or translation the paper assigns), dependencies, concerns, and source location (computed by the runner by finding the verbatim LaTeX in the source, never reported by the model). Approval status is not stored here: it lives in `decisions.json` |
 | `Defs.lean` | The theory: types, lexicon, composition rules, model class, definitions, numbered examples and their representations |
+| `Concepts.lean` | Notions that claims need but the paper doesn't define as such, built on `Defs.lean` (stage 2b, see "Concepts" in §4) |
 | `statements.json` | Per claim: its Lean statement (a closed `Prop`, from stage 3) and notes. Frozen once approved: stage 4 proves or refutes exactly this |
 | `claims/<id>.lean` | One file per claim: a theorem `<id>` (proved) or `<id>_false : ¬ …` (refuted, with a counterexample) |
 | `Oracle.lean` (+ CLI wrapper) | The executable oracle (§6) |
@@ -174,9 +175,46 @@ agent's decisions" for the user to approve or overturn afterwards.
 |---|---|---|
 | 1 | **Extract** definitions, claims, and examples (numbered sentences + their LFs or translations), including claims stated only in running text | Coverage, and each informal `statement` |
 | 2 | **Formalize definitions** (`Defs.lean`) | Each interpretive choice, listed separately with the alternative readings |
+| 2b | **Concepts** (`Concepts.lean`), per batch of claims, before stating them | Each new notion: its definition, and the interpretive choice it makes |
 | 3 | **State claims** (statement only, no proof yet) | Each statement's fidelity. *This is the key fidelity checkpoint*: a faithful statement that turns out false is a finding, and an unfaithful statement is a bug |
 | 4 | **Prove / refute** | Nothing, unless the prover wants to change a statement (rule 4 above). Outcomes are reported, with each refutation's counterexample in the paper's own terms |
 | 5 | **Oracle** | A few sample queries whose answers the user already knows, as a sanity check |
+
+### Concepts (stage 2b)
+
+Some claims need notions that `Defs.lean` doesn't have: the paper uses
+them without defining them as such. Examples from the first real paper:
+"the LFs of sentence (3a)" (a derivation relation from a surface string to
+its LFs) and "a pair-list reading". A statement can't define them itself:
+
+- **Statements contain no definitions.** A statement is a single term over
+  the reviewed vocabulary: no `def`, `inductive` or other commands.
+  (`let` and `fun` inside the term are allowed, but they can't express
+  recursive or inductive notions.)
+- Why: a definition is an interpretive choice (a "derivation" relation is
+  a theory of movement), which is the user's to review at a checkpoint,
+  not hidden inside one statement. A definition can make a claim trivially
+  true ("PL reading" too narrow → "no PL reading" holds by definition).
+  And claims sharing a notion must share one definition, or they can
+  disagree without anyone noticing.
+
+So new notions get their own stage, before stating a batch of claims:
+
+1. The model reads the batch's claims with `Defs.lean` and lists the
+   notions they need that Defs doesn't have. It defines each **once**, in
+   `Concepts.lean` (built on `Defs.lean`, same namespace), with notes on
+   each interpretive choice and the alternative readings, as for Defs.
+   Notions already in Defs are reused, never redefined.
+2. **Checkpoint 2b**: the user reviews each new notion, as at checkpoint 2.
+   Blind back-translation covers each definition here too.
+3. `state` then sees Defs + Concepts. The no-definitions rule for
+   statements is unchanged.
+
+`Concepts.lean` grows batch by batch; an approved notion is frozen like a
+statement. Back-translating a statement shows the translator Concepts as
+well as Defs (stripped the same way). An approval records the hashes of
+the definitions the statement depends on, so changing a notion voids the
+approval of every statement that uses it.
 
 ### The review file
 

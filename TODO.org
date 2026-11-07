@@ -312,6 +312,26 @@ Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
   - [ ] Structured (multiple-choice) questions where the agent has them,
         plain text otherwise
 
+* TODO Concepts stage (SPEC.md §4 "Concepts", checkpoint 2b)
+  Decided 2026-11-07: statements still contain no definitions; notions the
+  claims need but Defs lacks are defined once per batch in =Concepts.lean=
+  and reviewed before =state=. Motivated by the real paper's A-over-A
+  claims: "the LFs of (3a)" needs an inductive derivation relation, and
+  "PL reading" would otherwise be re-invented per claim.
+  - [ ] Prompt =prompts/concepts.md=: batch claims + Defs → new notions,
+        each with notes and alternative readings; reuse Defs, never redefine
+  - [ ] Runner step =concepts [ids]= → =Concepts.lean= (+ =Concepts.notes.md=),
+        compiled after Defs with =write_lean()=; audit: no shadowing of Defs
+        names, same namespace, no escape hatches
+  - [ ] =state=, =backtranslate=, =prove= paste Defs + Concepts (translator
+        sees Concepts stripped, like Defs)
+  - [ ] Back-translation of each new definition (checkpoint 2b)
+  - [ ] Approvals record hashes of the definitions a statement uses;
+        changing one voids dependent approvals (=approval_problem()=)
+  - [ ] Test on the real paper: typing + all-derivation claims
+        (c-AoA-blocks, c60, c61, c-strict, …); review together with the
+        open =Defs.notes.md= items ((55b), (79), ∃-closure, pointwise Ans)
+
 * TODO Agent and model independence (SPEC.md §4, §8)
   Future-proofing; only Claude is tested and supported for now (README says so).
   - [ ] Replace =call_claude()= with a backend interface: prompt + JSON
