@@ -433,6 +433,25 @@ Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
             default model, closes by plain =rfl=); c16 by the fixed =rfl=
             pre-pass ($0); c14 by Sonnet, first attempt ($0.08). Only c13
             and c16 of the 16 close by =rfl=/=decide= alone
+      - [X] Rest of the 16 (2026-11-07, $0.93 for 13): all proved, all by
+            Sonnet on attempt 1, standard axioms only; 21–106s per claim,
+            time ≈ output tokens (2–13k, mostly thinking). Proofs are of
+            the statements as written: rerun any claim whose statement
+            changes in review
+  - [ ] Generality probes, after =prove= (not replacing statements):
+        runner substitutes a fixed parameter (=Mode.poly= → ∀ mode, =g0= →
+        ∀ g, =M.actual= → ∀ w) and proves/refutes the variant; refutation
+        = the claim depends on that choice (cf. (44) under strict Q).
+        Report as extra findings (SPEC.md §9)
+  - [X] Parallel =prove= (2026-11-07): one at a time until a model call has
+        written the cache, then a thread pool (=--jobs=, default 6); output
+        buffered per claim. All 16 rerun in =runs/EHK-parallel-test/=: 5m23s
+        (193s of it the first claim alone; the other 14 in ~2 min), $1.17,
+        16/16 proved
+  - [X] Tried Sonnet at =--effort low= in that rerun: no saving ($1.17 vs
+        ~$1.16), c14 used 26.7k output tokens (3.2k at default), c20 failed
+        twice and went up a tier. Back to default effort; tiers keep the
+        effort setting
   - [X] Cheaper =prove= (2026-11-07): fixed-proof pre-pass (=FIXED_PROOFS=,
         =rfl=, no model); model tiers (=PROVE_TIERS=: Sonnet ×2, then default
         ×3; challenges go up a tier, since Lean doesn't check them); notes
@@ -440,8 +459,7 @@ Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
         derivation). =results.json= records the model
   - [ ] If retries turn out common: show the prover the goal after Lean
         unfolds the definitions (=simp only [denotAt, interp, …]=) instead
-        of having it simulate =interp=. Parallel claims after the first
-        (cache written) for wall-clock time
+        of having it simulate =interp=
   - [ ] Extract: tag each claim's kind (data / derivation / typing /
         metatheoretic / other theory); =state= skips data claims or states
         them as predictions. Found on the real paper

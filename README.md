@@ -123,7 +123,9 @@ an earlier output, rerun the steps after it.
    first (2 attempts), then the CLI's default model (3 attempts). A weaker
    prover can only fail, never pass a wrong proof, since Lean checks every
    proof against the frozen statement; a challenge from a lower tier is
-   rechecked by the next one.
+   rechecked by the next one. Once the first model call has cached the
+   shared prompt, the remaining claims run in parallel (`--jobs N`,
+   default 6).
 
    `results.json` also records the axioms each proof uses (only `propext`,
    `Classical.choice` and `Quot.sound` are allowed), Lean's own rendering

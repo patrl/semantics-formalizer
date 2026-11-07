@@ -17,12 +17,15 @@ or --out DIR. See README.md.
 """
 
 import argparse
+import io
 import json
 import os
 import re
 import subprocess
 import sys
 import tempfile
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 ROOT = Path(__file__).parent
@@ -33,9 +36,26 @@ SYSTEM_PROMPT = "You are a careful assistant. Follow the instructions exactly."
 
 SPENT = []   # the cost of each model call in this run, in USD
 
+_OUTPUT = threading.local()   # .buf: where `say` writes in this thread, if set
+
+
+def say(*args, **kwargs) -> None:
+    """`print`, but into this thread's buffer when running under `buffered`."""
+    print(*args, file=getattr(_OUTPUT, "buf", None) or sys.stdout, **kwargs)
+
+
+def buffered(fn, *args):
+    """Run fn(*args), collecting what it `say`s. Returns (output, fn's result)."""
+    _OUTPUT.buf = io.StringIO()
+    try:
+        result = fn(*args)
+        return _OUTPUT.buf.getvalue(), result
+    finally:
+        _OUTPUT.buf = None
+
 
 def call_claude(prompt: str, schema: dict, shared_until: str | None = None,
-                model: str | None = None) -> dict:
+                model: str | None = None, effort: str | None = None) -> dict:
     """Send one prompt to `claude -p` (no tools) and return its JSON answer.
 
     Each call starts from a fresh, isolated context: run from an empty temp
@@ -52,7 +72,8 @@ def call_claude(prompt: str, schema: dict, shared_until: str | None = None,
     back at a tenth of the price by the next claim; the rest is the user
     message. Without it, caching is off.
 
-    `model` is a `--model` alias (e.g. "sonnet"); None = the CLI's default.
+    `model` is a `--model` alias (e.g. "sonnet"), `effort` an `--effort`
+    level (low … max); None = the CLI's default.
     """
     system, user = SYSTEM_PROMPT, prompt
     if shared_until and shared_until in prompt:
@@ -71,7 +92,7 @@ def call_claude(prompt: str, schema: dict, shared_until: str | None = None,
         "--disable-slash-commands",
         "--output-format", "json",
         "--json-schema", json.dumps(schema),
-    ] + (["--model", model] if model else [])
+    ] + (["--model", model] if model else []) + (["--effort", effort] if effort else [])
     with tempfile.TemporaryDirectory() as cwd:
         out = subprocess.run(cmd, input=user, capture_output=True, text=True,
                              check=True, cwd=cwd, env=env)
@@ -80,7 +101,7 @@ def call_claude(prompt: str, schema: dict, shared_until: str | None = None,
         sys.exit(f"claude returned an error: {reply.get('result')}")
     SPENT.append(reply["total_cost_usd"])
     u = reply["usage"]
-    print(f"  (cost ${reply['total_cost_usd']:.3f}, {reply['duration_ms'] / 1000:.0f}s;"
+    say(f"  (cost ${reply['total_cost_usd']:.3f}, {reply['duration_ms'] / 1000:.0f}s;"
           f" tokens: {u['cache_read_input_tokens']} cached,"
           f" {u['cache_creation_input_tokens'] + u['input_tokens']} new,"
           f" {u['output_tokens']} out)")
@@ -328,8 +349,8 @@ def audit(code: str, log: str, forbidden: list[str],
 def write_lean(task: str, out_path: Path, schema: dict = LEAN_SCHEMA,
                prefix: str = "", forbidden: list[str] = ESCAPE_HATCHES,
                theorem_name=None, check=None, assemble=None, own=None,
-               stop=None, shared_until=None, model=None, attempts=MAX_ATTEMPTS,
-               start=1) -> dict | None:
+               stop=None, shared_until=None, model=None, effort=None,
+               attempts=MAX_ATTEMPTS, start=1) -> dict | None:
     """Ask for Lean code, compile + audit it, feed problems back; up to `attempts` times.
 
     The code is `answer["lean"]`, or `assemble(answer)` if given (the runner
@@ -339,8 +360,8 @@ def write_lean(task: str, out_path: Path, schema: dict = LEAN_SCHEMA,
     main theorem if `theorem_name(answer)` gives one; `check(answer)`, if
     given, returns further audit problems. If `stop(answer)`, the answer is
     returned as is, uncompiled. `shared_until` is passed to `call_claude`
-    (the task up to it is cached across claims and attempts), `model` to it
-    as is. Every attempt is kept as <name>.attemptN.lean / .log next to
+    (the task up to it is cached across claims and attempts), `model` and
+    `effort` to it as is. Every attempt is kept as <name>.attemptN.lean / .log next to
     out_path, N counting from `start` (so a second round doesn't overwrite
     the first). Returns the model's final answer (plus audit facts)
     if it passed, else None.
@@ -348,10 +369,11 @@ def write_lean(task: str, out_path: Path, schema: dict = LEAN_SCHEMA,
     prompt = task
     offset = prefix.count("\n")
     for n in range(start, start + attempts):
-        print(f"  attempt {n}" + (f" ({model})" if model else "") + ":", end="")
-        answer = call_claude(prompt, schema, shared_until, model)
+        label = ", ".join(x for x in (model, effort) if x)
+        say(f"  attempt {n}" + (f" ({label})" if label else "") + ":", end="")
+        answer = call_claude(prompt, schema, shared_until, model, effort)
         if stop and stop(answer):
-            print("  stopped")
+            say("  stopped")
             return answer | {"attempts": n}
         code = assemble(answer) if assemble else answer["lean"]
         theorem = theorem_name(answer) if theorem_name else None
@@ -368,17 +390,17 @@ def write_lean(task: str, out_path: Path, schema: dict = LEAN_SCHEMA,
         attempt.with_suffix(".log").write_text(log)
         if ok and not problems:
             out_path.write_text(prefix + code + suffix)
-            print(f"  passed -> {out_path.name}")
+            say(f"  passed -> {out_path.name}")
             return answer | facts | {"attempts": n}
         # A compile error also shows up as sorryAx in the audit; report the cause.
         first = ((log.strip().splitlines() if not ok else []) or problems or ["(no output)"])[0]
-        print(f"  failed: {first}")
+        say(f"  failed: {first}")
         prompt = (task
                   + "\n\n--- YOUR PREVIOUS ATTEMPT (as compiled, after DEFINITIONS) ---\n" + code
                   + "\n\n--- LEAN OUTPUT AND AUDIT (line numbers count from the code above) ---\n"
                   + log
                   + "\n\nFix every problem above and return your complete corrected code.")
-    print(f"  gave up after {attempts} attempt(s)")
+    say(f"  gave up after {attempts} attempt(s)")
     return None
 
 
@@ -619,13 +641,18 @@ PROVE_SCHEMA = {
 # claims hold by evaluation alone; a statement closed this way costs nothing.
 FIXED_PROOFS = ["by intros; rfl"]
 
-# Who tries to prove, in order, and with how many attempts each. A proof can't
-# be wrong — Lean and the audit check it against the frozen statement — so a
-# cheaper model first only risks failing, and failures go up a tier. A
-# `challenge` (the statement isn't faithful) is a judgment, not checked by
-# Lean, so it goes up a tier too; only the last tier's challenge stands.
-# None = the CLI's default model.
-PROVE_TIERS = [("sonnet", 2), (None, 3)]
+# Who tries to prove, in order: (model, effort, attempts). A proof can't be
+# wrong — Lean and the audit check it against the frozen statement — so a
+# cheaper model or lower effort first only risks failing, and failures go up
+# a tier. A `challenge` (the statement isn't faithful) is a judgment, not
+# checked by Lean, so it goes up a tier too; only the last tier's challenge
+# stands. None = the CLI's default.
+# (Sonnet at "low" effort was tried on the real paper: no cheaper overall,
+# one claim used 8x the output tokens, another needed the next tier.)
+PROVE_TIERS = [("sonnet", None, 2), (None, None, 3)]
+
+# Claims proved at once, once the first model call has written the cache.
+PROVE_JOBS = 6
 
 
 def try_fixed_proofs(prefix: str, assemble, out_path: Path,
@@ -645,7 +672,64 @@ def try_fixed_proofs(prefix: str, assemble, out_path: Path,
     return None
 
 
-def prove(run_dir: Path, only: str | None = None) -> None:
+def prove_one(item: dict, stmt: str, defs_lean: str, ns: str, out_dir: Path) -> dict:
+    """Settle one frozen statement: fixed proofs, then the model tiers. Returns its result."""
+    cid = item["id"]
+    say(f"prove {cid} ({item['label']}) -> claims/{cid}.lean")
+    task = fill((PROMPTS / "prove.md").read_text(), namespace=ns,
+                defs=defs_lean, statement=stmt,
+                claim=json.dumps(item, indent=2, ensure_ascii=False))
+
+    # The theorem header is ours, built from the frozen statement; the
+    # model only supplies helpers and the proof term.
+    def assemble(a: dict) -> str:
+        header = (f"theorem {cid} :\n    {stmt} :=" if a["verdict"] == "proved"
+                  else f"theorem {cid}_false :\n    ¬ ({stmt}) :=")
+        helpers = a["helpers"].strip()
+        return (f"namespace {ns}\n\n" + (helpers + "\n\n" if helpers else "")
+                + f"{header} {a['proof'].strip()}\n\nend {ns}\n")
+
+    fixed = try_fixed_proofs(defs_lean, assemble, out_dir / f"{cid}.lean", f"{ns}.{cid}")
+    if fixed:
+        proof, facts = fixed
+        say(f"  fixed proof `{proof}` passed -> {cid}.lean\n  => PROVED")
+        return {"outcome": "proved", "attempts": 0, "model": None,
+                "statement": stmt,
+                "lean_statement": facts["lean_statement"],
+                "axioms": facts["axioms"],
+                "notes": f"Closed by the fixed proof `{proof}`, no model call."}
+
+    answer, start = None, 1
+    for model, effort, attempts in PROVE_TIERS:
+        answer = write_lean(
+            task, out_dir / f"{cid}.lean", PROVE_SCHEMA, defs_lean,
+            forbidden=ESCAPE_HATCHES + NEW_DEFINITIONS + SCOPE_CHANGES,
+            assemble=assemble, own=lambda a: a["helpers"] + "\n" + a["proof"],
+            stop=lambda a: a["verdict"] == "challenge", shared_until="--- CLAIM ---",
+            theorem_name=lambda a: f"{ns}.{cid}" if a["verdict"] == "proved"
+                                   else f"{ns}.{cid}_false",
+            model=model, effort=effort, attempts=attempts, start=start)
+        start = answer["attempts"] + 1 if answer else start + attempts
+        if answer and answer["verdict"] != "challenge":
+            break
+    if answer and answer["verdict"] == "challenge":
+        say(f"  => CHALLENGED: {answer['notes']}")
+        return {"outcome": "challenged", "attempts": answer["attempts"],
+                "model": model, "statement": stmt, "notes": answer["notes"]}
+    if answer:
+        say(f"  => {answer['verdict'].upper()}")
+        return {"outcome": answer["verdict"],
+                "attempts": answer["attempts"],
+                "model": model,
+                "statement": stmt,
+                "lean_statement": answer["lean_statement"],
+                "axioms": answer["axioms"],
+                "notes": answer["notes"]}
+    say("  => OPEN")
+    return {"outcome": "open", "attempts": start - 1, "statement": stmt, "notes": ""}
+
+
+def prove(run_dir: Path, only: str | None = None, jobs: int = PROVE_JOBS) -> None:
     defs_lean, ns = load_defs(run_dir)
     statements = json.loads((run_dir / "statements.json").read_text())
     out_dir = run_dir / "claims"
@@ -653,70 +737,33 @@ def prove(run_dir: Path, only: str | None = None) -> None:
     results_path = run_dir / "results.json"
     results = json.loads(results_path.read_text()) if results_path.exists() else {}
 
-    for item in claim_items(run_dir, only):
-        cid = item["id"]
-        if cid not in statements:
-            print(f"prove {cid}: skipped, no statement in statements.json (run `state`)")
-            continue
-        stmt = statements[cid]["statement"]
-        print(f"prove {cid} ({item['label']}) -> claims/{cid}.lean")
-        task = fill((PROMPTS / "prove.md").read_text(), namespace=ns,
-                    defs=defs_lean, statement=stmt,
-                    claim=json.dumps(item, indent=2, ensure_ascii=False))
+    todo = [i for i in claim_items(run_dir, only) if i["id"] in statements]
+    skipped = [i["id"] for i in claim_items(run_dir, only) if i["id"] not in statements]
+    if skipped:
+        print(f"skipped {len(skipped)} claim(s) with no statement in statements.json"
+              f" (run `state`): {', '.join(skipped)}")
 
-        # The theorem header is ours, built from the frozen statement; the
-        # model only supplies helpers and the proof term.
-        def assemble(a: dict) -> str:
-            header = (f"theorem {cid} :\n    {stmt} :=" if a["verdict"] == "proved"
-                      else f"theorem {cid}_false :\n    ¬ ({stmt}) :=")
-            helpers = a["helpers"].strip()
-            return (f"namespace {ns}\n\n" + (helpers + "\n\n" if helpers else "")
-                    + f"{header} {a['proof'].strip()}\n\nend {ns}\n")
-
-        fixed = try_fixed_proofs(defs_lean, assemble, out_dir / f"{cid}.lean",
-                                 f"{ns}.{cid}")
-        if fixed:
-            proof, facts = fixed
-            results[cid] = {"outcome": "proved", "attempts": 0, "model": None,
-                            "statement": stmt,
-                            "lean_statement": facts["lean_statement"],
-                            "axioms": facts["axioms"],
-                            "notes": f"Closed by the fixed proof `{proof}`, no model call."}
-            print(f"  fixed proof `{proof}` passed -> {cid}.lean\n  => PROVED")
-            results_path.write_text(json.dumps(results, indent=2, ensure_ascii=False) + "\n")
-            continue
-
-        answer, start = None, 1
-        for model, attempts in PROVE_TIERS:
-            answer = write_lean(
-                task, out_dir / f"{cid}.lean", PROVE_SCHEMA, defs_lean,
-                forbidden=ESCAPE_HATCHES + NEW_DEFINITIONS + SCOPE_CHANGES,
-                assemble=assemble, own=lambda a: a["helpers"] + "\n" + a["proof"],
-                stop=lambda a: a["verdict"] == "challenge", shared_until="--- CLAIM ---",
-                theorem_name=lambda a: f"{ns}.{cid}" if a["verdict"] == "proved"
-                                       else f"{ns}.{cid}_false",
-                model=model, attempts=attempts, start=start)
-            start = answer["attempts"] + 1 if answer else start + attempts
-            if answer and answer["verdict"] != "challenge":
-                break
-        if answer and answer["verdict"] == "challenge":
-            results[cid] = {"outcome": "challenged", "attempts": answer["attempts"],
-                            "model": model, "statement": stmt, "notes": answer["notes"]}
-            print(f"  => CHALLENGED: {answer['notes']}")
-        elif answer:
-            results[cid] = {"outcome": answer["verdict"],
-                            "attempts": answer["attempts"],
-                            "model": model,
-                            "statement": stmt,
-                            "lean_statement": answer["lean_statement"],
-                            "axioms": answer["axioms"],
-                            "notes": answer["notes"]}
-            print(f"  => {answer['verdict'].upper()}")
-        else:
-            results[cid] = {"outcome": "open", "attempts": start - 1,
-                            "statement": stmt, "notes": ""}
-            print("  => OPEN")
+    def record(item: dict, result: dict) -> None:
+        results[item["id"]] = result
         results_path.write_text(json.dumps(results, indent=2, ensure_ascii=False) + "\n")
+
+    # One at a time until a model call has written the shared prompt to the
+    # cache; then the rest in parallel, all reading it back. Each claim's
+    # output is buffered and printed whole when it finishes.
+    calls_before = len(SPENT)
+    while todo and len(SPENT) == calls_before:
+        item = todo.pop(0)
+        record(item, prove_one(item, statements[item["id"]]["statement"],
+                               defs_lean, ns, out_dir))
+    if todo:
+        with ThreadPoolExecutor(max_workers=jobs) as pool:
+            futures = {pool.submit(buffered, prove_one, item,
+                                   statements[item["id"]]["statement"],
+                                   defs_lean, ns, out_dir): item for item in todo}
+            for f in as_completed(futures):
+                output, result = f.result()
+                print(output, end="", flush=True)
+                record(futures[f], result)
 
     print("\nsummary:")
     for cid, r in results.items():
@@ -757,6 +804,8 @@ def main() -> None:
     parser.add_argument("claim", nargs="?",
                         help="state/backtranslate/prove: only this claim id "
                              "(default: all claims)")
+    parser.add_argument("--jobs", type=int, default=PROVE_JOBS, metavar="N",
+                        help=f"prove: claims proved at once (default {PROVE_JOBS})")
     parser.add_argument("--out", metavar="DIR",
                         help="run directory (default: runs/<paper name>)")
     args = parser.parse_args()
@@ -775,7 +824,7 @@ def main() -> None:
     elif args.step == "backtranslate":
         backtranslate(args.paper, run_dir, args.claim)
     elif args.step == "prove":
-        prove(run_dir, args.claim)
+        prove(run_dir, args.claim, args.jobs)
     print(f"\n{len(SPENT)} model call(s), ${sum(SPENT):.2f}")
 
 
