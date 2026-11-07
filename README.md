@@ -1,4 +1,4 @@
-# semantics-formalizer
+# Sinnmaschine
 A procedure for auto-formalizing a semantics paper in Lean.
 
 Give it the LaTeX source of a formal-semantics paper. It extracts the

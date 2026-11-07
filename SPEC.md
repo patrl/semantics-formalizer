@@ -1,4 +1,4 @@
-# semantics-formalizer: specification
+# Sinnmaschine: specification
 
 This file says what the project is for and what it must and must not do.
 `TODO.org` tracks progress. If the two disagree, change the code or change

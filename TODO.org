@@ -1,4 +1,4 @@
-#+TITLE: semantics-formalizer plan
+#+TITLE: Sinnmaschine plan
 #+TODO: TODO NEXT | DONE
 
 Barebones take on [[https://github.com/Jiyuan-Tan/PaperFormalizer][PaperFormalizer]]: LaTeX → extract claims → write Lean →

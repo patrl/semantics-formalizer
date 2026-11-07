@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Barebones auto-formalizer for semantics papers.
+"""Sinnmaschine: a barebones auto-formalizer for semantics papers.
 
 Usage:
     python3 formalize.py extract PAPER.tex            # -> claims.json
