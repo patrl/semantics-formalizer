@@ -17,6 +17,8 @@ or --out DIR. See README.md.
 """
 
 import argparse
+import datetime
+import hashlib
 import io
 import json
 import os
@@ -208,10 +210,62 @@ def whole_environment(tex: str, latex: str) -> str | None:
     return None
 
 
+# --- Claim ids -----------------------------------------------------------------
+
+# Ids come from the model and end up in file names and Lean declarations, so
+# they're held to a safe alphabet: no path separators, dots, spaces or
+# guillemets. In Lean they're always written «id», which allows hyphens and
+# keywords.
+ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}")
+
+
+def check_id(cid: str) -> str:
+    if not ID_RE.fullmatch(cid):
+        sys.exit(f"unsafe item id {cid!r}: ids may only use letters, digits, - and _"
+                 " (fix it in claims.json, with every reference to it)")
+    return cid
+
+
+def safe_ids(items: list[dict]) -> dict[str, str]:
+    """Rename ids outside ID_RE, references included. Returns {old: new} for the renamed."""
+    taken = {i["id"] for i in items if ID_RE.fullmatch(i["id"])}
+    renamed = {}
+    for item in items:
+        old = item["id"]
+        if ID_RE.fullmatch(old) or old in renamed:
+            continue
+        base = re.sub(r"[^A-Za-z0-9_-]", "_", old).lstrip("_-")[:60] or "item"
+        new, n = base, 2
+        while new in taken:
+            new, n = f"{base}_{n}", n + 1
+        taken.add(new)
+        renamed[old] = new
+    for item in items:
+        item["id"] = renamed.get(item["id"], item["id"])
+        item["depends_on"] = [renamed.get(d, d) for d in item["depends_on"]]
+        item["cites"] = [renamed.get(c, c) for c in item["cites"]]
+    return renamed
+
+
+def id_path(directory: Path, cid: str, suffix: str) -> Path:
+    """<directory>/<cid><suffix>, refusing an unsafe id or a path outside directory."""
+    path = directory / f"{check_id(cid)}{suffix}"
+    if not path.resolve().is_relative_to(directory.resolve()):
+        sys.exit(f"refusing to write outside {directory}: {path}")
+    return path
+
+
+def lean_id(cid: str) -> str:
+    """A claim id as a Lean identifier."""
+    return f"«{check_id(cid)}»"
+
+
 def extract(paper: Path, run_dir: Path) -> None:
     print(f"extract: {paper} -> {run_dir}/claims.json")
     tex = paper.read_text()
     result = call_claude((PROMPTS / "extract.md").read_text() + tex, CLAIMS_SCHEMA)
+    for old, new in safe_ids(result["items"]).items():
+        print(f"  ⚠ unsafe id {old!r} renamed to {new!r}")
     kinds = {i["id"]: i["kind"] for i in result["items"]}
     seen = set()
     for item in result["items"]:
@@ -330,7 +384,11 @@ def audit(code: str, log: str, forbidden: list[str],
         for m in re.finditer(pattern, bare):
             problems.append(f"forbidden construct `{m.group(0).strip()}` in your code")
     if theorem:
-        m = re.search(rf"^'{re.escape(theorem)}' (?:depends on axioms: \[(.*)\]"
+        # Lean prints «x» as plain x where x is a valid identifier, so the
+        # guillemets are optional in the match.
+        name = r"\.".join(f"«?{re.escape(part.strip('«»'))}»?"
+                          for part in re.split(r"\.(?![^«]*»)", theorem))
+        m = re.search(rf"^'{name}' (?:depends on axioms: \[(.*)\]"
                       r"|does not depend on any axioms)$", log, re.M)
         if not m:
             problems.append(f"no theorem named `{theorem}` was found")
@@ -482,9 +540,18 @@ STATE_SCHEMA = {
 }
 
 
-def claim_items(run_dir: Path, only: str | None) -> list[dict]:
+def claim_items(run_dir: Path, only: list[str] | None) -> list[dict]:
+    """The claims in claims.json (only those named in `only`, if given)."""
     items = json.loads((run_dir / "claims.json").read_text())["items"]
-    return [i for i in items if i["kind"] == "claim" and (not only or i["id"] == only)]
+    for i in items:
+        check_id(i["id"])
+    claims = [i for i in items if i["kind"] == "claim"]
+    if only:
+        unknown = set(only) - {i["id"] for i in claims}
+        if unknown:
+            sys.exit(f"no such claim in claims.json: {', '.join(sorted(unknown))}")
+        claims = [i for i in claims if i["id"] in only]
+    return claims
 
 
 def load_defs(run_dir: Path) -> tuple[str, str]:
@@ -495,7 +562,7 @@ def load_defs(run_dir: Path) -> tuple[str, str]:
     return defs_lean, paper_namespace(defs_lean)
 
 
-def state(run_dir: Path, only: str | None = None) -> None:
+def state(run_dir: Path, only: list[str] | None = None) -> None:
     defs_lean, ns = load_defs(run_dir)
     out_dir = run_dir / "statements"
     out_dir.mkdir(exist_ok=True)
@@ -508,7 +575,7 @@ def state(run_dir: Path, only: str | None = None) -> None:
         task = fill((PROMPTS / "state.md").read_text(), namespace=ns, defs=defs_lean,
                     claim=json.dumps(item, indent=2, ensure_ascii=False))
         answer = write_lean(
-            task, out_dir / f"{cid}.lean", STATE_SCHEMA, defs_lean,
+            task, id_path(out_dir, cid, ".lean"), STATE_SCHEMA, defs_lean,
             forbidden=ESCAPE_HATCHES + NEW_DEFINITIONS + COMMANDS,
             assemble=lambda a: (f"namespace {ns}\n\nexample : Prop :=\n"
                                 f"  {a['statement'].strip()}\n\nend {ns}\n"),
@@ -576,7 +643,7 @@ def translator_prompt(defs_lean: str, statement: str) -> str:
                 defs=blind_defs(defs_lean), statement=strip_comments(statement).strip())
 
 
-def backtranslate(paper: Path, run_dir: Path, only: str | None = None) -> None:
+def backtranslate(paper: Path, run_dir: Path, only: list[str] | None = None) -> None:
     """Blind back-translation of each statement, compared with the paper.
 
     The translator sees only stripped Lean (`translator_prompt`). The
@@ -600,7 +667,7 @@ def backtranslate(paper: Path, run_dir: Path, only: str | None = None) -> None:
         statement = statements[cid]["statement"]
         print(f"back-translate {cid} ({item['label']})")
         prompt = translator_prompt(defs_lean, statement)
-        (out_dir / f"{cid}.prompt.md").write_text(prompt)   # kept for auditing isolation
+        id_path(out_dir, cid, ".prompt.md").write_text(prompt)   # kept for auditing isolation
         reading = call_claude(prompt, BACK_SCHEMA, "--- STATEMENT ---")
         print(f"compare {cid}")
         diffs = call_claude(fill((PROMPTS / "compare.md").read_text(),
@@ -621,6 +688,78 @@ def backtranslate(paper: Path, run_dir: Path, only: str | None = None) -> None:
                   for c in ("substantive", "choice", "wording")}
         print(f"  {cid:16} {'FLAGGED' if r['flagged'] else 'ok':8} "
               + ", ".join(f"{n} {c}" for c, n in counts.items() if n))
+
+
+# --- Step 3c: approve statements ----------------------------------------------
+
+# decisions.json holds the user's rulings; `prove` reads it to refuse
+# statements nobody approved. An approval names the statement by its hash, so
+# editing an approved statement in statements.json voids the approval.
+
+def statement_hash(statement: str) -> str:
+    return hashlib.sha256(statement.encode()).hexdigest()
+
+
+def load_decisions(run_dir: Path) -> dict:
+    path = run_dir / "decisions.json"
+    return json.loads(path.read_text()) if path.exists() else {"statements": {}}
+
+
+def load_backtranslations(run_dir: Path) -> dict:
+    path = run_dir / "backtranslations.json"
+    return json.loads(path.read_text()) if path.exists() else {}
+
+
+def backtranslation_issue(backs: dict, cid: str, stmt: str) -> str | None:
+    """Why the back-translation doesn't vouch for `stmt`, or None if it does."""
+    bt = backs.get(cid)
+    if not bt:
+        return "not back-translated"
+    if bt["statement"] != stmt:
+        return "back-translated from an older statement"
+    if bt["flagged"]:
+        return "back-translation flagged a substantive difference"
+    return None
+
+
+def approve(run_dir: Path, only: list[str] | None = None, override: bool = False) -> None:
+    """Record the user's approval of each statement (default: every stated claim)."""
+    statements = json.loads((run_dir / "statements.json").read_text())
+    backs = load_backtranslations(run_dir)
+    decisions = load_decisions(run_dir)
+    for item in claim_items(run_dir, only):
+        cid = item["id"]
+        if cid not in statements:
+            if only:
+                print(f"approve {cid}: skipped, no statement (run `state`)")
+            continue
+        stmt = statements[cid]["statement"]
+        issue = backtranslation_issue(backs, cid, stmt)
+        if issue and not override:
+            print(f"approve {cid}: refused, {issue} (run `backtranslate`,"
+                  " or pass --override once you've reviewed it anyway)")
+            continue
+        decisions["statements"][cid] = {
+            "decision": "approved", "by": "user",
+            "date": datetime.date.today().isoformat(),
+            "statement_sha256": statement_hash(stmt),
+            "override": issue}
+        print(f"approve {cid}" + (f" (despite: {issue})" if issue else ""))
+    (run_dir / "decisions.json").write_text(
+        json.dumps(decisions, indent=2, ensure_ascii=False) + "\n")
+
+
+def approval_problem(decisions: dict, backs: dict, cid: str, stmt: str) -> str | None:
+    """Why `prove` may not take `stmt` as approved, or None if it may."""
+    d = decisions["statements"].get(cid)
+    if not d or d["decision"] != "approved":
+        return "not approved (run `approve`)"
+    if d["statement_sha256"] != statement_hash(stmt):
+        return "statement changed since it was approved"
+    issue = backtranslation_issue(backs, cid, stmt)
+    if issue and issue != d["override"]:
+        return f"{issue} since it was approved"
+    return None
 
 
 # --- Step 4: prove / refute ---------------------------------------------------
@@ -683,13 +822,14 @@ def prove_one(item: dict, stmt: str, defs_lean: str, ns: str, out_dir: Path) -> 
     # The theorem header is ours, built from the frozen statement; the
     # model only supplies helpers and the proof term.
     def assemble(a: dict) -> str:
-        header = (f"theorem {cid} :\n    {stmt} :=" if a["verdict"] == "proved"
-                  else f"theorem {cid}_false :\n    ¬ ({stmt}) :=")
+        header = (f"theorem {lean_id(cid)} :\n    {stmt} :=" if a["verdict"] == "proved"
+                  else f"theorem {lean_id(cid + '_false')} :\n    ¬ ({stmt}) :=")
         helpers = a["helpers"].strip()
         return (f"namespace {ns}\n\n" + (helpers + "\n\n" if helpers else "")
                 + f"{header} {a['proof'].strip()}\n\nend {ns}\n")
 
-    fixed = try_fixed_proofs(defs_lean, assemble, out_dir / f"{cid}.lean", f"{ns}.{cid}")
+    out_path = id_path(out_dir, cid, ".lean")
+    fixed = try_fixed_proofs(defs_lean, assemble, out_path, f"{ns}.{lean_id(cid)}")
     if fixed:
         proof, facts = fixed
         say(f"  fixed proof `{proof}` passed -> {cid}.lean\n  => PROVED")
@@ -702,12 +842,12 @@ def prove_one(item: dict, stmt: str, defs_lean: str, ns: str, out_dir: Path) -> 
     answer, start = None, 1
     for model, effort, attempts in PROVE_TIERS:
         answer = write_lean(
-            task, out_dir / f"{cid}.lean", PROVE_SCHEMA, defs_lean,
+            task, out_path, PROVE_SCHEMA, defs_lean,
             forbidden=ESCAPE_HATCHES + NEW_DEFINITIONS + SCOPE_CHANGES,
             assemble=assemble, own=lambda a: a["helpers"] + "\n" + a["proof"],
             stop=lambda a: a["verdict"] == "challenge", shared_until="--- CLAIM ---",
-            theorem_name=lambda a: f"{ns}.{cid}" if a["verdict"] == "proved"
-                                   else f"{ns}.{cid}_false",
+            theorem_name=lambda a: f"{ns}.{lean_id(cid)}" if a["verdict"] == "proved"
+                                   else f"{ns}.{lean_id(cid + '_false')}",
             model=model, effort=effort, attempts=attempts, start=start)
         start = answer["attempts"] + 1 if answer else start + attempts
         if answer and answer["verdict"] != "challenge":
@@ -729,7 +869,10 @@ def prove_one(item: dict, stmt: str, defs_lean: str, ns: str, out_dir: Path) -> 
     return {"outcome": "open", "attempts": start - 1, "statement": stmt, "notes": ""}
 
 
-def prove(run_dir: Path, only: str | None = None, jobs: int = PROVE_JOBS) -> None:
+def prove(run_dir: Path, only: list[str] | None = None, jobs: int = PROVE_JOBS,
+          unreviewed: bool = False) -> None:
+    """Prove or refute each approved statement; with `unreviewed`, every statement,
+    and those not approved are marked unreviewed in results.json."""
     defs_lean, ns = load_defs(run_dir)
     statements = json.loads((run_dir / "statements.json").read_text())
     out_dir = run_dir / "claims"
@@ -742,8 +885,18 @@ def prove(run_dir: Path, only: str | None = None, jobs: int = PROVE_JOBS) -> Non
     if skipped:
         print(f"skipped {len(skipped)} claim(s) with no statement in statements.json"
               f" (run `state`): {', '.join(skipped)}")
+    decisions, backs = load_decisions(run_dir), load_backtranslations(run_dir)
+    problems = {i["id"]: approval_problem(decisions, backs, i["id"],
+                                          statements[i["id"]]["statement"]) for i in todo}
+    if not unreviewed:
+        for cid, problem in problems.items():
+            if problem:
+                print(f"prove {cid}: refused, {problem}")
+        todo = [i for i in todo if not problems[i["id"]]]
 
     def record(item: dict, result: dict) -> None:
+        if problems[item["id"]]:
+            result["unreviewed"] = True
         results[item["id"]] = result
         results_path.write_text(json.dumps(results, indent=2, ensure_ascii=False) + "\n")
 
@@ -797,13 +950,21 @@ def run_dir_for(paper: Path, out: str | None) -> Path:
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Formalize a semantics paper in Lean, one step at a time.",
-        epilog="Steps, in order: extract, defs, state, backtranslate, prove. "
-               "Review statements.json (with backtranslations.json) before running prove.")
-    parser.add_argument("step", choices=["extract", "defs", "state", "backtranslate", "prove"])
+        epilog="Steps, in order: extract, defs, state, backtranslate, approve, prove. "
+               "Review statements.json (with backtranslations.json), then `approve`: "
+               "prove takes only approved statements.")
+    parser.add_argument("step", choices=["extract", "defs", "state", "backtranslate",
+                                         "approve", "prove"])
     parser.add_argument("paper", type=Path, help="the paper's LaTeX source (one .tex file)")
-    parser.add_argument("claim", nargs="?",
-                        help="state/backtranslate/prove: only this claim id "
+    parser.add_argument("claim", nargs="*",
+                        help="state/backtranslate/approve/prove: only these claim ids "
                              "(default: all claims)")
+    parser.add_argument("--override", action="store_true",
+                        help="approve: even if back-translation is missing, stale or "
+                             "flagged (recorded in decisions.json)")
+    parser.add_argument("--unreviewed", action="store_true",
+                        help="prove: also statements not approved (for testing); "
+                             "their results are marked unreviewed")
     parser.add_argument("--jobs", type=int, default=PROVE_JOBS, metavar="N",
                         help=f"prove: claims proved at once (default {PROVE_JOBS})")
     parser.add_argument("--out", metavar="DIR",
@@ -823,8 +984,10 @@ def main() -> None:
         state(run_dir, args.claim)
     elif args.step == "backtranslate":
         backtranslate(args.paper, run_dir, args.claim)
+    elif args.step == "approve":
+        approve(run_dir, args.claim, args.override)
     elif args.step == "prove":
-        prove(run_dir, args.claim, args.jobs)
+        prove(run_dir, args.claim, args.jobs, args.unreviewed)
     print(f"\n{len(SPENT)} model call(s), ${sum(SPENT):.2f}")
 
 

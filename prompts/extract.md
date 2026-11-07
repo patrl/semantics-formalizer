@@ -25,7 +25,8 @@ with Definition 3") is not an item of its own: record the claims it cites in
 For each item give:
 
 - `id`: a short stable identifier, e.g. `def1`, `prop3`, `ex2` (use the
-  paper's own numbering where it has one).
+  paper's own numbering where it has one), made only of letters, digits,
+  `-` and `_`.
 - `kind`: `"definition"`, `"example"`, or `"claim"`.
 - `label`: the paper's own name for it, e.g. `"Proposition 3"`, `"(2)"`, or
   a short description for unlabelled items, e.g. `"Truth conditions of (3)"`.

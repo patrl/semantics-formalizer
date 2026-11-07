@@ -51,11 +51,12 @@ python3 formalize.py defs    $P         # 2. definitions in Lean
 python3 formalize.py state   $P         # 3. each claim as a Lean statement
 python3 formalize.py backtranslate $P   # 3b. blind check of each statement
 #    review runs/smith-2019/statements.json here (see below)
+python3 formalize.py approve $P         # 3c. record your approval
 python3 formalize.py prove   $P         # 4. prove or refute each statement
 ```
 
-`state`, `backtranslate` and `prove` take an optional claim id to do one claim only, e.g.
-`python3 formalize.py prove $P prop3`.
+`state`, `backtranslate`, `approve` and `prove` take optional claim ids to
+do only those claims, e.g. `python3 formalize.py prove $P prop3 prop4`.
 
 Outputs go to `runs/<paper name>/`: the file's name, or its folder's name
 if the file is called `paper.tex`, `main.tex` and so on. Use `--out DIR`
@@ -108,6 +109,14 @@ an earlier output, rerun the steps after it.
    faithfully shows no difference. A clean result is evidence, not a
    substitute for your review. If you edit a statement, rerun
    `backtranslate` on it.
+
+   **`approve` → `decisions.json`** records that you've reviewed a
+   statement; `prove` refuses any statement that isn't approved. An
+   approval is tied to the statement's exact text, so editing it later
+   voids the approval. `approve` refuses a statement whose back-translation
+   is missing, out of date or flagged, unless you pass `--override` (which
+   is recorded). `prove --unreviewed` skips the check, for testing, and
+   marks those results `unreviewed`.
 4. **`prove` → `results.json`, `claims/<id>.lean`.** For each claim, the
    outcome:
    - `proved`: the statement holds; the proof is `theorem <id>`.

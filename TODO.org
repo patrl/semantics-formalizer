@@ -11,13 +11,27 @@ plan consistent with it.
 Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
 =claude -p= with =--json-schema=.
 
-* TODO Validate generated claim IDs before using them in paths or Lean declarations
+* DONE Validate generated claim IDs before using them in paths or Lean declarations
   Allowlist IDs as safe Lean/file identifiers and containment-check every generated
   output path, so malformed IDs cannot escape a run directory.
+  - [X] (2026-11-07) =ID_RE= (letters, digits, =-=, =_=; ≤64): =extract=
+        renames unsafe ids with their references; =claim_items= refuses them
+        (hand edits); =id_path()= checks containment; Lean names always
+        =«id»= (hyphens, keywords). Audit matches the theorem name with or
+        without guillemets (Lean prints =«end»= as =end=). Tested offline,
+        incl. =c-AoA-test= proved through Lean
 
-* TODO Require approved statements before proving claims
+* DONE Require approved statements before proving claims
   Persist per-claim review decisions in =decisions.json= and reject statements that
   are unreviewed, stale, or substantively flagged by back-translation.
+  - [X] (2026-11-07) New step =approve [ids]= → =decisions.json= (approval
+        tied to the statement's sha256; refused if back-translation is
+        missing / stale / flagged unless =--override=, which is recorded).
+        =prove= refuses unapproved, edited-since, or newly flagged
+        statements; =--unreviewed= bypasses and marks results. All steps
+        take several claim ids. Tested offline: all refusal paths, approve,
+        stale after edit, =--unreviewed=. Still to do: the toy acceptance
+        script will need =--unreviewed= (or =--auto=, SPEC.md §4)
 
 * DONE Step 0: setup
   - [X] Toy paper =examples/toy/paper.tex= (determiners, conservativity, monotonicity)
