@@ -442,7 +442,9 @@ Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
           (c22, c23: what a failed ι contributes to a set — =none= member — the
           paper doesn't say) ($8.10: ~$0.50/claim, whole paper + 757-line
           Defs per call — over the $5 estimated)
-    - [ ] Author review of the 16 statements, then =prove=
+    - [X] Author review of the 16 statements, then =prove=: all 16 approved
+          (2026-11-07, =decisions.json=, no overrides); existing proofs are
+          of exactly the approved statements
       - [X] Trial =prove= before review (2026-11-07): c13 proved ($0.15,
             default model, closes by plain =rfl=); c16 by the fixed =rfl=
             pre-pass ($0); c14 by Sonnet, first attempt ($0.08). Only c13
