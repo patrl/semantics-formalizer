@@ -34,7 +34,8 @@ SYSTEM_PROMPT = "You are a careful assistant. Follow the instructions exactly."
 SPENT = []   # the cost of each model call in this run, in USD
 
 
-def call_claude(prompt: str, schema: dict, shared_until: str | None = None) -> dict:
+def call_claude(prompt: str, schema: dict, shared_until: str | None = None,
+                model: str | None = None) -> dict:
     """Send one prompt to `claude -p` (no tools) and return its JSON answer.
 
     Each call starts from a fresh, isolated context: run from an empty temp
@@ -50,6 +51,8 @@ def call_claude(prompt: str, schema: dict, shared_until: str | None = None) -> d
     step, goes in the system prompt, which is cached for 5 minutes and read
     back at a tenth of the price by the next claim; the rest is the user
     message. Without it, caching is off.
+
+    `model` is a `--model` alias (e.g. "sonnet"); None = the CLI's default.
     """
     system, user = SYSTEM_PROMPT, prompt
     if shared_until and shared_until in prompt:
@@ -68,7 +71,7 @@ def call_claude(prompt: str, schema: dict, shared_until: str | None = None) -> d
         "--disable-slash-commands",
         "--output-format", "json",
         "--json-schema", json.dumps(schema),
-    ]
+    ] + (["--model", model] if model else [])
     with tempfile.TemporaryDirectory() as cwd:
         out = subprocess.run(cmd, input=user, capture_output=True, text=True,
                              check=True, cwd=cwd, env=env)
@@ -325,8 +328,9 @@ def audit(code: str, log: str, forbidden: list[str],
 def write_lean(task: str, out_path: Path, schema: dict = LEAN_SCHEMA,
                prefix: str = "", forbidden: list[str] = ESCAPE_HATCHES,
                theorem_name=None, check=None, assemble=None, own=None,
-               stop=None, shared_until=None) -> dict | None:
-    """Ask for Lean code, compile + audit it, feed problems back; up to MAX_ATTEMPTS.
+               stop=None, shared_until=None, model=None, attempts=MAX_ATTEMPTS,
+               start=1) -> dict | None:
+    """Ask for Lean code, compile + audit it, feed problems back; up to `attempts` times.
 
     The code is `answer["lean"]`, or `assemble(answer)` if given (the runner
     builds it from the answer's fields; `own(answer)` is then the part the
@@ -335,15 +339,17 @@ def write_lean(task: str, out_path: Path, schema: dict = LEAN_SCHEMA,
     main theorem if `theorem_name(answer)` gives one; `check(answer)`, if
     given, returns further audit problems. If `stop(answer)`, the answer is
     returned as is, uncompiled. `shared_until` is passed to `call_claude`
-    (the task up to it is cached across claims and attempts). Every attempt is kept as <name>.attemptN.lean /
-    .log next to out_path. Returns the model's final answer (plus audit facts)
+    (the task up to it is cached across claims and attempts), `model` to it
+    as is. Every attempt is kept as <name>.attemptN.lean / .log next to
+    out_path, N counting from `start` (so a second round doesn't overwrite
+    the first). Returns the model's final answer (plus audit facts)
     if it passed, else None.
     """
     prompt = task
     offset = prefix.count("\n")
-    for n in range(1, MAX_ATTEMPTS + 1):
-        print(f"  attempt {n}:", end="")
-        answer = call_claude(prompt, schema, shared_until)
+    for n in range(start, start + attempts):
+        print(f"  attempt {n}" + (f" ({model})" if model else "") + ":", end="")
+        answer = call_claude(prompt, schema, shared_until, model)
         if stop and stop(answer):
             print("  stopped")
             return answer | {"attempts": n}
@@ -372,7 +378,7 @@ def write_lean(task: str, out_path: Path, schema: dict = LEAN_SCHEMA,
                   + "\n\n--- LEAN OUTPUT AND AUDIT (line numbers count from the code above) ---\n"
                   + log
                   + "\n\nFix every problem above and return your complete corrected code.")
-    print(f"  gave up after {MAX_ATTEMPTS} attempts")
+    print(f"  gave up after {attempts} attempt(s)")
     return None
 
 
@@ -609,6 +615,36 @@ PROVE_SCHEMA = {
 }
 
 
+# Proofs tried on every statement before any model call. Many denotation
+# claims hold by evaluation alone; a statement closed this way costs nothing.
+FIXED_PROOFS = ["by intros; rfl"]
+
+# Who tries to prove, in order, and with how many attempts each. A proof can't
+# be wrong — Lean and the audit check it against the frozen statement — so a
+# cheaper model first only risks failing, and failures go up a tier. A
+# `challenge` (the statement isn't faithful) is a judgment, not checked by
+# Lean, so it goes up a tier too; only the last tier's challenge stands.
+# None = the CLI's default model.
+PROVE_TIERS = [("sonnet", 2), (None, 3)]
+
+
+def try_fixed_proofs(prefix: str, assemble, out_path: Path,
+                     theorem: str) -> tuple[str, dict] | None:
+    """Try FIXED_PROOFS on the statement, no model. Returns (proof, audit facts) or None."""
+    suffix = f"\n\n#print axioms {theorem}\n#check @{theorem}\n"
+    for proof in FIXED_PROOFS:
+        code = assemble({"verdict": "proved", "helpers": "", "proof": proof})
+        attempt = out_path.with_suffix(".fixed.lean")
+        attempt.write_text(prefix + code + suffix)
+        ok, log = compile_lean(attempt)
+        problems, facts = audit("", log, [], theorem)
+        attempt.unlink()
+        if ok and not problems:
+            out_path.write_text(prefix + code + suffix)
+            return proof, facts
+    return None
+
+
 def prove(run_dir: Path, only: str | None = None) -> None:
     defs_lean, ns = load_defs(run_dir)
     statements = json.loads((run_dir / "statements.json").read_text())
@@ -637,27 +673,47 @@ def prove(run_dir: Path, only: str | None = None) -> None:
             return (f"namespace {ns}\n\n" + (helpers + "\n\n" if helpers else "")
                     + f"{header} {a['proof'].strip()}\n\nend {ns}\n")
 
-        answer = write_lean(
-            task, out_dir / f"{cid}.lean", PROVE_SCHEMA, defs_lean,
-            forbidden=ESCAPE_HATCHES + NEW_DEFINITIONS + SCOPE_CHANGES,
-            assemble=assemble, own=lambda a: a["helpers"] + "\n" + a["proof"],
-            stop=lambda a: a["verdict"] == "challenge", shared_until="--- CLAIM ---",
-            theorem_name=lambda a: f"{ns}.{cid}" if a["verdict"] == "proved"
-                                   else f"{ns}.{cid}_false")
+        fixed = try_fixed_proofs(defs_lean, assemble, out_dir / f"{cid}.lean",
+                                 f"{ns}.{cid}")
+        if fixed:
+            proof, facts = fixed
+            results[cid] = {"outcome": "proved", "attempts": 0, "model": None,
+                            "statement": stmt,
+                            "lean_statement": facts["lean_statement"],
+                            "axioms": facts["axioms"],
+                            "notes": f"Closed by the fixed proof `{proof}`, no model call."}
+            print(f"  fixed proof `{proof}` passed -> {cid}.lean\n  => PROVED")
+            results_path.write_text(json.dumps(results, indent=2, ensure_ascii=False) + "\n")
+            continue
+
+        answer, start = None, 1
+        for model, attempts in PROVE_TIERS:
+            answer = write_lean(
+                task, out_dir / f"{cid}.lean", PROVE_SCHEMA, defs_lean,
+                forbidden=ESCAPE_HATCHES + NEW_DEFINITIONS + SCOPE_CHANGES,
+                assemble=assemble, own=lambda a: a["helpers"] + "\n" + a["proof"],
+                stop=lambda a: a["verdict"] == "challenge", shared_until="--- CLAIM ---",
+                theorem_name=lambda a: f"{ns}.{cid}" if a["verdict"] == "proved"
+                                       else f"{ns}.{cid}_false",
+                model=model, attempts=attempts, start=start)
+            start = answer["attempts"] + 1 if answer else start + attempts
+            if answer and answer["verdict"] != "challenge":
+                break
         if answer and answer["verdict"] == "challenge":
             results[cid] = {"outcome": "challenged", "attempts": answer["attempts"],
-                            "statement": stmt, "notes": answer["notes"]}
+                            "model": model, "statement": stmt, "notes": answer["notes"]}
             print(f"  => CHALLENGED: {answer['notes']}")
         elif answer:
             results[cid] = {"outcome": answer["verdict"],
                             "attempts": answer["attempts"],
+                            "model": model,
                             "statement": stmt,
                             "lean_statement": answer["lean_statement"],
                             "axioms": answer["axioms"],
                             "notes": answer["notes"]}
             print(f"  => {answer['verdict'].upper()}")
         else:
-            results[cid] = {"outcome": "open", "attempts": MAX_ATTEMPTS,
+            results[cid] = {"outcome": "open", "attempts": start - 1,
                             "statement": stmt, "notes": ""}
             print("  => OPEN")
         results_path.write_text(json.dumps(results, indent=2, ensure_ascii=False) + "\n")

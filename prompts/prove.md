@@ -39,9 +39,12 @@ Constraints:
 - Your code is audited automatically: the theorem may only depend on Lean's
   standard axioms (`propext`, `Classical.choice`, `Quot.sound`).
 
-In `notes`, briefly explain the verdict (and the counterexample, if any, in
-the paper's own terms). Don't comment on whether the code compiles — it will
-be compiled for you and any errors sent back.
+`notes` is for the reader of the results, in at most three sentences, in the
+paper's own terms: for `"disproved"`, the counterexample; for `"challenge"`,
+the mismatch; for `"proved"`, only anything surprising (e.g. the statement
+holds for a reason the paper doesn't give), otherwise leave it empty. Don't
+narrate the derivation or your proof strategy, and don't comment on whether
+the code compiles — it will be compiled for you and any errors sent back.
 
 --- DEFINITIONS ---
 {defs}

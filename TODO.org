@@ -429,6 +429,19 @@ Choices so far: toy paper first, core Lean only (no Mathlib), model calls via
           paper doesn't say) ($8.10: ~$0.50/claim, whole paper + 757-line
           Defs per call — over the $5 estimated)
     - [ ] Author review of the 16 statements, then =prove=
+      - [X] Trial =prove= before review (2026-11-07): c13 proved ($0.15,
+            default model, closes by plain =rfl=); c16 by the fixed =rfl=
+            pre-pass ($0); c14 by Sonnet, first attempt ($0.08). Only c13
+            and c16 of the 16 close by =rfl=/=decide= alone
+  - [X] Cheaper =prove= (2026-11-07): fixed-proof pre-pass (=FIXED_PROOFS=,
+        =rfl=, no model); model tiers (=PROVE_TIERS=: Sonnet ×2, then default
+        ×3; challenges go up a tier, since Lean doesn't check them); notes
+        only when notable (c13 had 2.5k output tokens narrating the
+        derivation). =results.json= records the model
+  - [ ] If retries turn out common: show the prover the goal after Lean
+        unfolds the definitions (=simp only [denotAt, interp, …]=) instead
+        of having it simulate =interp=. Parallel claims after the first
+        (cache written) for wall-clock time
   - [ ] Extract: tag each claim's kind (data / derivation / typing /
         metatheoretic / other theory); =state= skips data claims or states
         them as predictions. Found on the real paper

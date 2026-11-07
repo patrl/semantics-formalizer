@@ -115,11 +115,19 @@ an earlier output, rerun the steps after it.
      negation, and the notes describe the countermodel.
    - `challenged`: the prover thinks the statement doesn't match the claim;
      nothing was proved. Fix the statement and rerun `prove` on that claim.
-   - `open`: no audited proof either way after 4 attempts.
+   - `open`: no audited proof either way after all attempts.
+
+   Before any model call, `prove` tries `rfl` on the statement; many
+   denotation claims hold by evaluation alone, and then cost nothing. The
+   model calls then go up in tiers (`PROVE_TIERS` in `formalize.py`): Sonnet
+   first (2 attempts), then the CLI's default model (3 attempts). A weaker
+   prover can only fail, never pass a wrong proof, since Lean checks every
+   proof against the frozen statement; a challenge from a lower tier is
+   rechecked by the next one.
 
    `results.json` also records the axioms each proof uses (only `propext`,
-   `Classical.choice` and `Quot.sound` are allowed) and Lean's own rendering
-   of the proved statement.
+   `Classical.choice` and `Quot.sound` are allowed), Lean's own rendering
+   of the proved statement, and which model (if any) found the proof.
 
 Every Lean attempt is kept next to its output (`*.attemptN.lean`, with the
 compiler output in `*.attemptN.log`), so you can see what was tried.
